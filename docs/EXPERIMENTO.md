@@ -94,13 +94,13 @@ que es exactamente una **red neuronal de una capa oculta** con $M$ neuronas y pe
 
 La distribución de datos $\gamma_t \in \mathcal{P}(\mathbb{R}^{d_1})$ en el instante $t$ evoluciona según la **ecuación de continuidad** (ec. 1.3 del paper):
 
-$$\partial_t \gamma_t + \operatorname{div}_x\!\left(F(x, t) \, \gamma_t\right) = 0$$
+$$\partial_t \gamma_t + \text{div}_x\!\left(F(x, t) \, \gamma_t\right) = 0$$
 
 Esta PDE expresa que la "masa" (densidad de datos) se conserva y se transporta con el campo $F$: no se crean ni destruyen puntos, simplemente se mueven. Intuitivamente, la ODE empuja cada punto del dataset a lo largo de trayectorias determinadas por $F$, transformando $\gamma_0$ (la distribución inicial, no separable) en $\gamma_T$ (separable linealmente).
 
 La solución formal es el push-forward:
 
-$$\gamma_t = (\phi_t)_\# \gamma_0$$
+$$\gamma_t = (\phi_t)_{\sharp} \gamma_0$$
 
 donde $\phi_t : \mathbb{R}^{d_1} \to \mathbb{R}^{d_1}$ es el flujo del campo $F$, es decir, la función que lleva cada punto $X_0$ a su posición $X_t$ al integrar la ODE.
 
@@ -225,7 +225,7 @@ La penalización cuártica $c_1 \theta^4$ es la diferencia clave respecto a la r
 
 Este experimento es la materialización visual de la ecuación de continuidad:
 
-$$\partial_t \gamma_t + \operatorname{div}_x(F(x,t) \, \gamma_t) = 0$$
+$$\partial_t \gamma_t + \text{div}_x(F(x,t) \, \gamma_t) = 0$$
 
 La "masa" de datos se conserva y se transporta. El campo $F$ aprendido es el que hace que las clases se separen, y el clasificador lineal final es simplemente un hiperplano en $\mathbb{R}^2$ sobre la representación transformada.
 
