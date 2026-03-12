@@ -86,7 +86,7 @@ donde $a = (a_0, a_1, a_2) \in A = \mathbb{R}^{d_1} \times \mathbb{R}^{d_1} \tim
 
 El campo efectivo con $M$ partículas (aproximación de $\nu_t$ por $M$ muestras discretas) es:
 
-$$F(x, t) \approx \frac{1}{M} \sum_{m=1}^{M} \sigma\!\left(a_1^m \cdot x + a_2^m\right) \cdot a_0^m$$
+$$F(x, t) \approx \frac{1}{M} \sum_{m=1}^{M} \sigma\left(a_1^m \cdot x + a_2^m\right) \cdot a_0^m$$
 
 que es exactamente una **red neuronal de una capa oculta** con $M$ neuronas y pesos que varían en el tiempo $t$.
 
@@ -112,7 +112,7 @@ $$J(\gamma_0, \nu) = \underbrace{\int L(x, y) \, d\gamma_T(x, y)}_{\text{coste t
 
 donde:
 - $L(x, y) = \text{BCE}(W \cdot x + b, y)$ es el coste de clasificación binaria
-- $\mathcal{E}(\nu_t \mid \nu^\infty) = \int \log\!\left(\frac{d\nu_t}{d\nu^\infty}\right) d\nu_t$ es la divergencia KL respecto al prior $\nu^\infty$
+- $\mathcal{E}(\nu_t \mid \nu^\infty) = \int \log\left(\frac{d\nu_t}{d\nu^\infty}\right) d\nu_t$ es la divergencia KL respecto al prior $\nu^\infty$
 - $\varepsilon > 0$ controla la intensidad de la regularización
 
 El prior es $\nu^\infty(da) \propto e^{-\ell(a)} \, da$ con potencial **supercoercivo** (Assumption Regularity (i)):
@@ -127,7 +127,7 @@ donde $\mathcal{I}$ es la información de Fisher. Esta desigualdad es el ingredi
 
 El control óptimo $\nu_t^*$ tiene la **forma de Gibbs** (ec. 1.9):
 
-$$\nu_t^*(da) \propto \exp\!\left(-\ell(a) - \frac{1}{\varepsilon} \int_{\mathbb{R}^{d_1}} b(x, a) \cdot \nabla u_t(x) \, d\gamma_t(x)\right) da$$
+$$\nu_t^*(da) \propto \exp\left(-\ell(a) - \frac{1}{\varepsilon} \int_{\mathbb{R}^{d_1}} b(x, a) \cdot \nabla u_t(x) \, d\gamma_t(x)\right) da$$
 
 donde $u_t$ es la función de valor (solución de la ecuación de Hamilton-Jacobi-Bellman hacia atrás). Esto dice que el control óptimo concentra $\nu_t^*$ en los parámetros $a$ que minimizan $L$ pero "penalizados" por el potencial $\ell(a)$.
 
