@@ -94,7 +94,7 @@ que es exactamente una **red neuronal de una capa oculta** con $M$ neuronas y pe
 
 La distribución de datos $\gamma_t \in \mathcal{P}(\mathbb{R}^{d_1})$ en el instante $t$ evoluciona según la **ecuación de continuidad** (ec. 1.3 del paper):
 
-$$\partial_t \gamma_t + \text{div}_x\!\left(F(x, t) \, \gamma_t\right) = 0$$
+$$\partial_t \gamma_t + \text{div}_x\left(F(x, t) \, \gamma_t\right) = 0$$
 
 Esta PDE expresa que la "masa" (densidad de datos) se conserva y se transporta con el campo $F$: no se crean ni destruyen puntos, simplemente se mueven. Intuitivamente, la ODE empuja cada punto del dataset a lo largo de trayectorias determinadas por $F$, transformando $\gamma_0$ (la distribución inicial, no separable) en $\gamma_T$ (separable linealmente).
 
