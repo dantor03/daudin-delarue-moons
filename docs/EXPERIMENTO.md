@@ -31,7 +31,7 @@
     - [B3 — Distribución de Gibbs de los parámetros](#b3--distribución-de-gibbs-de-los-parámetros)
     - [B4 — Campo de velocidad](#b4--campo-de-velocidad)
   - [6. Experimento C — Verificación empírica de la condición PL](#6-experimento-c--verificación-empírica-de-la-condición-pl)
-    - [C1 — Diagrama log-log: $|\\nabla J|^2$ vs $(J - J^*)$](#c1--diagrama-log-log-nabla-j2-vs-j---j)
+    - [C1 — Diagrama log-log: $|\\nabla J|^2$ vs $(J - J^\*)$](#c1--diagrama-log-log-nabla-j2-vs-j---j)
     - [C2 — Convergencia exponencial (escala semilog)](#c2--convergencia-exponencial-escala-semilog)
     - [C3 — Constante PL estimada $\\hat{\\mu}$ por $\\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
     - [C4 — Ratio PL a lo largo del entrenamiento](#c4--ratio-pl-a-lo-largo-del-entrenamiento)
@@ -206,7 +206,7 @@ La penalización cuártica $c_1 \theta^4$ es la diferencia clave respecto a la r
 
 **Configuración:** $\varepsilon = 0.01$, $M = 64$, $T = 1.0$, 800 épocas de entrenamiento.
 
-![Evolución de features γ_t](./A_feature_evolution.png)
+![Evolución de features γ_t](../figuras/A_feature_evolution.png)
 
 ### Lectura de la figura
 
@@ -239,7 +239,7 @@ La "masa" de datos se conserva y se transporta. El campo $F$ aprendido es el que
 
 ### B1 — Curvas de convergencia
 
-![Curvas de convergencia](./B1_convergence_curves.png)
+![Curvas de convergencia](../figuras/B1_convergence_curves.png)
 
 **Panel izquierdo (Pérdida total $J$):** Todos los modelos convergen con curvas similares. Para $\varepsilon$ mayores, el valor asintótico de $J$ es más alto porque incluye un término de penalización mayor. Sin embargo, la **velocidad de convergencia** es comparable, lo que confirma que $\varepsilon$ no frena el aprendizaje.
 
@@ -249,7 +249,7 @@ La "masa" de datos se conserva y se transporta. El campo $F$ aprendido es el que
 
 ### B2 — Fronteras de decisión
 
-![Fronteras de decisión](./B2_decision_boundaries.png)
+![Fronteras de decisión](../figuras/B2_decision_boundaries.png)
 
 Las cinco fronteras clasifican perfectamente las lunas (acc $= 1.000$). La diferencia es geométrica: mayor $\varepsilon$ produce fronteras más suaves y regulares, mientras que $\varepsilon = 0$ puede producir fronteras más irregulares o sobreajustadas. Esto es el efecto de regularización clásico: $\varepsilon$ controla la complejidad de la solución.
 
@@ -257,7 +257,7 @@ La forma de la frontera no es arbitraria: refleja la geometría del flujo $\phi_
 
 ### B3 — Distribución de Gibbs de los parámetros
 
-![Distribución de Gibbs](./B3_gibbs_parameter_dist.png)
+![Distribución de Gibbs](../figuras/B3_gibbs_parameter_dist.png)
 
 Este panel verifica directamente la **forma de Gibbs** del control óptimo (ec. 1.9 del paper). Los histogramas muestran la distribución empírica de todos los parámetros de $\nu$ (pesos de la red) al final del entrenamiento, comparada con el prior teórico $\nu^\infty \propto e^{-\ell(a)}$ (curva blanca discontinua).
 
@@ -275,7 +275,7 @@ Para $\varepsilon$ grandes, la distribución se concentra cerca del origen (form
 
 ### B4 — Campo de velocidad
 
-![Campo de velocidad](./B4_velocity_field.png)
+![Campo de velocidad](../figuras/B4_velocity_field.png)
 
 El campo vectorial efectivo $F(x, t=0.5)$ evaluado a mitad del flujo para cada $\varepsilon$. Las flechas muestran la dirección normalizada del campo (la velocidad con la que el flujo mueve cada punto); el color indica la magnitud.
 
@@ -289,7 +289,7 @@ El campo muestra cómo la ODE "empuja" los puntos hacia regiones separables: los
 
 **Datos:** Se reutilizan los modelos ya entrenados del Experimento B (sin reentrenar).
 
-![Verificación PL](./C_pl_verification.png)
+![Verificación PL](../figuras/C_pl_verification.png)
 
 ### C1 — Diagrama log-log: $\|\nabla J\|^2$ vs $(J - J^*)$
 
@@ -335,7 +335,7 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 **Protocolo:** Para 4 niveles de ruido que definen distintas $\gamma_0$, se entrenan $n = 5$ modelos con inicializaciones aleatorias independientes. Si el minimizador es único para esa $\gamma_0$, todas las inicializaciones deben converger al mismo $J^*$, lo que se mide por $\text{Std}(J^*)$.
 
-![Genericidad](./D_stability_genericity.png)
+![Genericidad](../figuras/D_stability_genericity.png)
 
 ### Lectura por filas
 
