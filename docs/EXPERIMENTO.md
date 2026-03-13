@@ -22,7 +22,7 @@
     - [3.1 Dataset: Make Moons](#31-dataset-make-moons)
     - [3.2 Arquitectura](#32-arquitectura)
     - [3.3 Función objetivo](#33-función-objetivo)
-  - [4. Experimento A — Evolución de features $\\gamma\_t$](#4-experimento-a--evolución-de-features-gamma_t)
+  - [4. Experimento A — Evolución de features $\gamma_{t}$](#4-experimento-a--evolución-de-features-gamma_t)
     - [Lectura de la figura](#lectura-de-la-figura)
     - [Interpretación](#interpretación)
   - [5. Experimento B — Efecto del parámetro $\\varepsilon$](#5-experimento-b--efecto-del-parámetro-varepsilon)
