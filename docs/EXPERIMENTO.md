@@ -271,7 +271,11 @@ La desviación estándar de los parámetros **decrece monótonamente con $\varep
 | 0.1   | 0.365 |
 | 0.5   | 0.284 |
 
-Para $\varepsilon$ grandes, la distribución se concentra cerca del origen (forma acampanada estrecha), acercándose al prior $\nu^\infty$. Para $\varepsilon$ pequeños, los parámetros se dispersan más porque no hay una fuerza significativa que los atraiga al prior. Esta es exactamente la predicción de la forma de Gibbs: mayor $\varepsilon$ implica que el término $-\ell(a)/\varepsilon$ domina menos sobre el término de clasificación, por lo que $\nu_t^*$ se acerca más a $\nu^\infty$.
+La forma de Gibbs explica directamente este comportamiento. El exponente tiene dos términos en competencia:
+
+$$\nu_t^*(da) \propto \exp\!\left(\underbrace{-\ell(a)}_{\text{prior}} \underbrace{-\frac{1}{\varepsilon}\int b(x,a)\cdot\nabla u_t \, d\gamma_t}_{\text{clasificación} \times 1/\varepsilon}\right)da$$
+
+El término de clasificación lleva un factor $1/\varepsilon$ delante. Cuando $\varepsilon$ es **pequeño**, $1/\varepsilon$ es grande y ese término domina: los parámetros se colocan donde mejor clasifican, ignorando casi por completo el prior, y $\nu_t^*$ se aleja de $\nu^\infty$ (parámetros dispersos). Cuando $\varepsilon$ es **grande**, $1/\varepsilon$ se hace pequeño, el término de clasificación pierde peso, el prior $-\ell(a)$ domina, y $\nu_t^*$ se concentra cerca de $\nu^\infty \propto e^{-\ell(a)}$, que pica en $a = 0$ (parámetros concentrados).
 
 ### B4 — Campo de velocidad
 
