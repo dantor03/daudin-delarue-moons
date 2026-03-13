@@ -127,7 +127,7 @@ donde $\mathcal{I}$ es la información de Fisher. Esta desigualdad es el ingredi
 
 El control óptimo $\nu_t^*$ tiene la **forma de Gibbs** (ec. 1.9):
 
-$$\nu_t^*(da) \propto \exp\left(-\ell(a) - \frac{1}{\varepsilon} \int_{\mathbb{R}^{d_1}} b(x, a) \cdot \nabla u_t(x) \, d\gamma_t(x)\right) da$$
+$$\nu_t^*(da) \propto \exp\left(-\ell(a) - \frac{1}{\varepsilon} \int_{\mathbb{R}^{d_1} \times \mathbb{R}^{d_2}} b(x, a) \cdot \nabla u_t(x,y) \, d\gamma_t(x,y)\right) da$$
 
 donde $u_t$ es la función de valor (solución de la ecuación de Hamilton-Jacobi-Bellman hacia atrás). Esto dice que el control óptimo concentra $\nu_t^*$ en los parámetros $a$ que minimizan $L$ pero "penalizados" por el potencial $\ell(a)$.
 
