@@ -301,9 +301,11 @@ Cada punto en el diagrama corresponde a una época de entrenamiento. Las coorden
 - **Eje X:** Excess cost $J(\theta) - J^*$ (cuánto le falta al modelo para llegar al óptimo)
 - **Eje Y:** $\|\nabla J(\theta)\|^2$ (norma al cuadrado del gradiente)
 
-La condición PL dice que todos los puntos deben estar **por encima** de la recta $y = 2\mu x$ (pendiente 1 en escala log-log). Las dos rectas blancas marcan los niveles $c = 1$ y $c = 10$.
+Las dos rectas blancas son **referencias**: $\|\nabla J\|^2 = 2(J-J^*)$ para $c=1$ (discontinua) y $\|\nabla J\|^2 = 20(J-J^*)$ para $c=10$ (punteada). La condición PL con constante $\mu$ se satisface si los puntos están por encima de la recta $y = 2\mu x$.
 
-**Resultado:** Todos los puntos de todos los modelos están por encima de $c = 1$, y la mayoría por encima de $c = 10$. La condición PL se cumple holgadamente.
+Los puntos coloreados aparecen **por debajo** de ambas líneas de referencia, lo que simplemente indica que la constante empírica $\hat{\mu} \ll 1$ (de hecho $\hat{\mu} \approx 0.002$, consistente con la tabla de C3). Esto no es una violación de PL: la condición solo exige $\mu > 0$, no $\mu \geq 1$.
+
+**Lo que sí confirma el gráfico:** la nube de puntos sigue una tendencia aproximadamente paralela a las rectas blancas (pendiente $\approx 1$ en log-log). Esto es la firma visual de la condición PL: $\|\nabla J\|^2$ crece proporcionalmente a $(J-J^*)$, con la constante de proporcionalidad $2\hat{\mu} \approx 0.004$.
 
 ### C2 — Convergencia exponencial (escala semilog)
 

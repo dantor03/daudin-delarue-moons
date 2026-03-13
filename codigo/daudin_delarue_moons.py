@@ -1062,7 +1062,7 @@ def experiment_C(results_eps: dict):
     style_ax(ax_ll,
              'Verificación PL  (log-log)\n'
              r'$\|\nabla J\|^2$ vs $(J - J^*)$'
-             '  —  puntos sobre la línea ✓',
+             r'  —  pendiente $\approx 1$ confirma PL con $\hat{\mu}\approx 0.002$',
              '$J(\\theta) - J^*$', r'$\|\nabla J(\theta)\|^2$')
     ax_ll.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7, markerscale=3)
 
