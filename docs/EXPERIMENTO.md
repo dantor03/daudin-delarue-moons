@@ -92,7 +92,7 @@ que es exactamente una **red neuronal de una capa oculta** con $M$ neuronas y pe
 
 ### 2.3 Ecuación de continuidad
 
-La distribución de datos $\gamma_t \in \mathcal{P}(\mathbb{R}^{d_1})$ en el instante $t$ evoluciona según la **ecuación de continuidad** (ec. 1.3 del paper):
+La distribución de datos $\gamma_t \in \mathcal{P}(\mathbb{R}^{d_1} \times \mathbb{R}^{d_2})$ en el instante $t$ evoluciona según la **ecuación de continuidad** (ec. 1.3 del paper):
 
 $$\partial_t \gamma_t + \text{div}_x\left(F(x, t) \, \gamma_t\right) = 0$$
 
