@@ -22,7 +22,7 @@
     - [3.1 Dataset: Make Moons](#31-dataset-make-moons)
     - [3.2 Arquitectura](#32-arquitectura)
     - [3.3 Función objetivo](#33-función-objetivo)
-  - [4. Experimento A — Evolución de features $\gamma_{t}$](#4-experimento-a--evolución-de-features-gamma_t)
+  - [4. Experimento A — Evolución de $\gamma_t$ (marginal en $x$)](#4-experimento-a--evolución-de-gamma_t-marginal-en-x)
     - [Lectura de la figura](#lectura-de-la-figura)
     - [Interpretación](#interpretación)
   - [5. Experimento B — Efecto del parámetro $\\varepsilon$](#5-experimento-b--efecto-del-parámetro-varepsilon)
@@ -96,13 +96,17 @@ La distribución de datos $\gamma_t \in \mathcal{P}(\mathbb{R}^{d_1} \times \mat
 
 $$\partial_t \gamma_t + \text{div}_x\left(F(x, t) \, \gamma_t\right) = 0$$
 
-Esta PDE expresa que la "masa" (densidad de datos) se conserva y se transporta con el campo $F$: no se crean ni destruyen puntos, simplemente se mueven. Intuitivamente, la ODE empuja cada punto del dataset a lo largo de trayectorias determinadas por $F$, transformando $\gamma_0$ (la distribución inicial, no separable) en $\gamma_T$ (separable linealmente).
+Esta PDE expresa que la "masa" (densidad de datos) se conserva y se transporta con el campo $F$: no se crean ni destruyen puntos, simplemente se mueven. El operador $\text{div}_x$ actúa **solo sobre la componente de features** $x \in \mathbb{R}^{d_1}$; la componente de etiquetas $y \in \mathbb{R}^{d_2}$ no aparece bajo la divergencia porque $F$ no actúa sobre ella. Intuitivamente, la ODE empuja la componente $x$ de cada punto a lo largo de trayectorias determinadas por $F$, de modo que la marginal en $x$ de $\gamma_0$ (no separable) se transforma en la marginal en $x$ de $\gamma_T$ (linealmente separable).
 
 La solución formal es el push-forward:
 
 $$\gamma_t = (\phi_t)_{\sharp} \gamma_0$$
 
-donde $\phi_t : \mathbb{R}^{d_1} \to \mathbb{R}^{d_1}$ es el flujo del campo $F$, es decir, la función que lleva cada punto $X_0$ a su posición $X_t$ al integrar la ODE.
+donde $\phi_t : \mathbb{R}^{d_1} \times \mathbb{R}^{d_2} \to \mathbb{R}^{d_1} \times \mathbb{R}^{d_2}$ es el flujo del campo $F$ sobre la distribución conjunta, definido por
+
+$$\phi_t(x_0, y) = (X_t, y)$$
+
+La ODE integra $dX_t/dt = F(X_t, t)$ solo para la componente de features $x_0 \to X_t$, mientras la etiqueta $y$ se transporta pasivamente sin cambiar. Dicho de otro modo: cada "partícula" de $\gamma_t$ es el par $(X_t^i, Y_0^i)$; los features evolucionan, las etiquetas son invariantes bajo el flujo.
 
 ### 2.4 Regularización entrópica y control óptimo
 
@@ -151,7 +155,7 @@ donde $\mathcal{I}$ es la información de Fisher en el espacio de medidas.
 
 ### 2.6 Los dos Meta-Teoremas
 
-**Meta-Teorema 1** (genericidad): Existe un conjunto abierto y denso $\mathcal{O}$ de condiciones iniciales $\gamma_0$ (en la topología de convergencia débil sobre $\mathcal{P}(\mathbb{R}^{d_1})$) tal que para todo $\gamma_0 \in \mathcal{O}$, el problema de control tiene un único minimizador **estable**.
+**Meta-Teorema 1** (genericidad): Existe un conjunto abierto y denso $\mathcal{O}$ de condiciones iniciales $\gamma_0$ (en la topología de convergencia débil sobre $\mathcal{P}(\mathbb{R}^{d_1} \times \mathbb{R}^{d_2})$) tal que para todo $\gamma_0 \in \mathcal{O}$, el problema de control tiene un único minimizador **estable**.
 
 > *"Casi toda distribución inicial de datos produce un paisaje de pérdida con un único mínimo profundo."*
 
@@ -167,9 +171,11 @@ donde $\mathcal{I}$ es la información de Fisher en el espacio de medidas.
 
 Se usa `make_moons` de scikit-learn con $N = 400$ puntos y ruido $\sigma = 0.12$, estandarizado con `StandardScaler`. Este dataset es canónico para probar clasificación no lineal: las dos clases forman medias lunas entrelazadas que no son separables linealmente en el espacio original.
 
-En el lenguaje del paper, los datos estandarizados constituyen la **distribución inicial empírica**:
+En el lenguaje del paper, los datos estandarizados constituyen la **distribución inicial empírica conjunta** (features + etiquetas):
 
-$$\gamma_0 = \frac{1}{N} \sum_{i=1}^{N} \delta_{X_0^i}$$
+$$\gamma_0 = \frac{1}{N} \sum_{i=1}^{N} \delta_{(X_0^i,\, Y_0^i)} \;\in\; \mathcal{P}(\mathbb{R}^{d_1} \times \mathbb{R}^{d_2})$$
+
+La ODE desplaza solo la componente de features $X_0^i \to X_t^i$; la etiqueta $Y_0^i$ permanece fija. Por eso $\gamma_t = \frac{1}{N}\sum_i \delta_{(X_t^i, Y_0^i)}$ sigue viviendo en $\mathbb{R}^{d_1} \times \mathbb{R}^{d_2}$ para todo $t$. Las figuras muestran la **marginal en $x$** de $\gamma_t$, coloreada según $Y_0^i$.
 
 ### 3.2 Arquitectura
 
@@ -200,9 +206,9 @@ La penalización cuártica $c_1 \theta^4$ es la diferencia clave respecto a la r
 
 ---
 
-## 4. Experimento A — Evolución de features $\gamma_t$
+## 4. Experimento A — Evolución de $\gamma_t$ (marginal en $x$)
 
-**Objetivo:** Visualizar cómo la ODE de campo medio transforma la distribución $\gamma_t$ a medida que avanza el "tiempo de red" $t \in [0, T]$.
+**Objetivo:** Visualizar cómo la ODE de campo medio transforma la distribución conjunta $\gamma_t \in \mathcal{P}(\mathbb{R}^{d_1} \times \mathbb{R}^{d_2})$ a medida que avanza el "tiempo de red" $t \in [0, T]$. En la práctica, cada snapshot muestra la **marginal en $x$** de $\gamma_t$, es decir, $(\gamma_t)_x = \int \gamma_t(dx, dy)$, coloreada según la etiqueta $y$ (que permanece constante para cada partícula).
 
 **Configuración:** $\varepsilon = 0.01$, $M = 64$, $T = 1.0$, 800 épocas de entrenamiento.
 
@@ -212,12 +218,12 @@ La penalización cuártica $c_1 \theta^4$ es la diferencia clave respecto a la r
 
 **Fila superior (izquierda a derecha):**
 - **$\gamma_{t=0}$** — La distribución inicial: las dos lunas entrelazadas. Ningún clasificador lineal puede separarlas. La ODE parte de aquí.
-- **$\gamma_{t=0.25}$** — Primer cuarto de la integración. Las lunas comienzan a deformarse. El campo $F(x, t)$ ya está empujando los puntos de cada clase en direcciones distintas.
-- **$\gamma_{t=0.5}$** — A mitad del flujo, las dos clases están claramente más separadas, aunque todavía hay cierto solapamiento.
-- **Curvas de pérdida** — La pérdida total $J$ (verde), la BCE pura (azul) y la penalización entrópica (naranja). La penalización crece al principio porque los parámetros se alejan del prior $\nu^\infty$, pero la BCE domina y converge a 0.
+- **$\gamma_{t=0.20}$** (paso 2/10) — Las lunas comienzan a deformarse. El campo $F(x, t)$ ya está empujando los puntos de cada clase en direcciones distintas.
+- **$\gamma_{t=0.50}$** (paso 5/10) — A mitad del flujo, las dos clases están claramente más separadas, aunque todavía hay cierto solapamiento.
+- **Curvas de pérdida** — La pérdida total $J$ (verde), la BCE pura (azul) y la penalización entrópica (naranja). La penalización crece gradualmente a medida que los parámetros se alejan del prior $\nu^\infty$ para resolver la clasificación. La BCE decrece y converge a casi 0.
 
 **Fila inferior:**
-- **$\gamma_{t=0.75}$** y **$\gamma_{t=1.0}$** — Las dos clases están ya bien separadas. El clasificador lineal $W \cdot X_T + b$ puede separarlas con acc $= 1.000$. El rectángulo discontinuo indica la extensión original de $\gamma_0$: los puntos se han movido considerablemente.
+- **$\gamma_{t=0.70}$** (paso 7/10) y **$\gamma_{t=1.0}$** (paso 10/10) — Las dos clases están ya bien separadas. El clasificador lineal $W \cdot X_T + b$ puede separarlas con acc $= 1.000$. El rectángulo discontinuo indica la extensión original de $\gamma_0$: los puntos se han movido considerablemente.
 - **Trayectorias $X_t$** — 40 partículas seleccionadas (20 de cada clase) con su trayectoria completa de $t=0$ (punto) a $t=T$ (estrella). Los puntos de la misma clase siguen trayectorias coherentes y coordinadas, lo que refleja que $F(x,t)$ actúa de forma colectiva sobre $\gamma_t$ — característica del campo medio.
 - **Frontera de decisión** — La isocurva $P(y=1|x) = 0.5$ en el espacio original $\mathbb{R}^2$. A pesar de que el clasificador final es lineal sobre $X_T$, la frontera en $X_0$ es altamente no lineal, pues incorpora toda la geometría del flujo $\phi_T$.
 
@@ -339,27 +345,52 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 **Objetivo:** Verificar empíricamente el Meta-Teorema 1: que la unicidad del minimizador estable es una propiedad "genérica" (válida para casi toda distribución inicial $\gamma_0$).
 
-**Protocolo:** Para 4 niveles de ruido que definen distintas $\gamma_0$, se entrenan $n = 5$ modelos con inicializaciones aleatorias independientes. Si el minimizador es único para esa $\gamma_0$, todas las inicializaciones deben converger al mismo $J^*$, lo que se mide por $\text{Std}(J^*)$.
+### Diseño mejorado (Ideas A + B + D)
+
+El diseño anterior variaba el ruido del dataset para cambiar $\gamma_0$, pero esto mezclaba la variación de $\gamma_0$ con la dificultad intrínseca de la tarea. El diseño actual emplea tres mejoras:
+
+**Idea A — Variar $\gamma_0$ via semilla del dataset:**
+Se generan $n_{\rm datasets} = 8$ datasets `make_moons` con el **mismo nivel de ruido** ($\sigma = 0.12$) pero distintas semillas aleatorias. Cada semilla produce una distribución $\gamma_0$ diferente manteniendo la misma dificultad de clasificación. Para cada $\gamma_0$ se entrenan $n_{\rm inits} = 3$ modelos con semillas de parámetros independientes.
+
+**Idea B — Criterio de convergencia adaptativo:**
+En lugar de fijar un número fijo de épocas (que puede dejar algunos modelos sin converger y a otros con tiempo malgastado), se detiene el entrenamiento cuando la norma cuadrada del gradiente satisface
+
+$$\|\nabla J\|^2 < \delta = 5 \times 10^{-5} \quad \text{durante 5 épocas consecutivas}$$
+
+con un mínimo de 300 épocas y un máximo de 800. Esto garantiza que todos los modelos han convergido realmente, haciendo la comparación de $J^*$ entre inicializaciones más limpia.
+
+**Idea D — Métrica de distancia de frontera ($\Delta_{\rm boundary}$):**
+La variabilidad escalar $\text{Std}(J^*)$ puede ser pequeña aunque las fronteras de decisión sean geométricamente distintas (dos mínimos con el mismo valor de pérdida). Para capturar la variabilidad geométrica, se evalúan todos los modelos en una rejilla densa $80 \times 80$ sobre el espacio de features y se calcula:
+
+$$\Delta_{\rm boundary}(\gamma_0) = \frac{1}{\binom{n_{\rm inits}}{2}} \sum_{i < j} \frac{\|\sigma(m_i(\text{grid})) - \sigma(m_j(\text{grid}))\|_F}{\sqrt{n_{\rm grid}}}$$
+
+donde $\sigma$ es la sigmoide y $n_{\rm grid} = 6400$. Si $\Delta_{\rm boundary} \approx 0$, todas las inicializaciones producen la **misma frontera geométrica**, evidencia directa de que el minimizador es único para esa $\gamma_0$.
+
+### Figura
 
 ![Genericidad](../figuras/D_stability_genericity.png)
 
-### Lectura por filas
+La figura tiene cuatro paneles:
 
-**Ruido = 0.05** (lunas muy bien separadas): $\text{Std}(J^*) = 0.00294$. Las 5 curvas de convergencia (panel izquierdo) son casi idénticas y el diagrama de barras (panel derecho) muestra alturas casi iguales. Existe un único mínimo profundo al que todas las inicializaciones convergen → **genericidad confirmada** para esta $\gamma_0$.
+- **(0,0) Barras de $J^*$:** grupos por $\gamma_0$ (8 grupos), barras por inicialización (3 colores). Permite ver qué $\gamma_0$ tienen inicializaciones dispersas y cuáles concentradas.
 
-**Ruido = 0.15** (separación moderada): $\text{Std}(J^*) = 0.072$. Una de las inicializaciones queda atrapada en un $J^*$ notablemente más alto que las demás. Esto indica que el paisaje de pérdida para esta $\gamma_0$ puede tener múltiples mínimos locales, o que la condición inicial está cerca del borde de $\mathcal{O}$ (el conjunto donde la unicidad se garantiza).
+- **(0,1) $\Delta_{\rm boundary}$ y Std$(J^*)$:** barras en coral para $\Delta_{\rm boundary}$ (eje izquierdo), línea en azul para Std$(J^*)$ (eje derecho). Ambas métricas deben ser pequeñas para afirmar genericidad. El coeficiente entre ambas revela si la variabilidad es escalar (solo $J^*$) o geométrica (fronteras distintas).
 
-**Ruido = 0.35 y 0.50** (fuerte solapamiento): $\text{Std} \approx 0.02$, intermedio. Las lunas se solapan significativamente, la clasificación perfecta es imposible, y el paisaje de pérdida tiene más estructura. Sin embargo, la varianza es menor que para ruido = 0.15, posiblemente porque con tanto solapamiento todos los modelos convergen a una solución similar "de compromiso".
+- **(1,0) Fronteras superpuestas — $\gamma_0$ con $\Delta$ mínimo:** las 3 fronteras de decisión (contornos de nivel 0.5) se superponen casi perfectamente. El fondo muestra el promedio de las salidas del clasificador. Esta $\gamma_0$ es la "más genérica" del conjunto.
+
+- **(1,1) Fronteras superpuestas — $\gamma_0$ con $\Delta$ máximo:** las 3 fronteras difieren visiblemente entre sí. Esta $\gamma_0$ está más cerca del borde de $\mathcal{O}$ o fuera de él.
 
 ### Interpretación
 
-Estos resultados son coherentes con el Meta-Teorema 1:
+- **$\Delta_{\rm boundary} \approx 0$ y Std$(J^*) \approx 0$:** todas las inicializaciones encuentran la misma solución tanto en valor ($J^*$) como en geometría (frontera). Evidencia de que $\gamma_0 \in \mathcal{O}$ y el minimizador es único.
 
-$$\text{Std}(J^*) \to 0 \implies \gamma_0 \in \mathcal{O}$$
+- **$\Delta_{\rm boundary}$ grande:** distintas inicializaciones convergen a fronteras geométricamente diferentes. Esto puede ocurrir aunque $\text{Std}(J^*)$ sea pequeño (simetría del paisaje) e indica que $\gamma_0$ puede estar fuera de $\mathcal{O}$ o en su frontera.
 
-Para $\gamma_0$ "fáciles" (bajo ruido), el minimizador es único y estable. Para $\gamma_0$ más complejas, aparece variabilidad entre inicializaciones, lo que indica que esas distribuciones pueden estar fuera (o en el borde) del conjunto $\mathcal{O}$ donde la unicidad se garantiza. El paper demuestra que los "malos" $\gamma_0$ (con múltiples mínimos estables) forman un conjunto sin interior — son raros, pero existen.
+- **El criterio adaptativo** asegura que las diferencias observadas son genuinas (convergencia real a distintos mínimos) y no artefactos de un presupuesto de épocas insuficiente.
 
-**Limitación importante:** Este experimento varía las inicializaciones de los **parámetros** $\theta \in \mathbb{R}^p$ (espacio finito-dimensional), mientras el paper trabaja con condiciones iniciales sobre **medidas de probabilidad** $\gamma_0 \in \mathcal{P}(\mathbb{R}^{d_1})$ (espacio infinito-dimensional). Los resultados son cualitativamente ilustrativos del Meta-Teorema 1, pero no constituyen una verificación formal de la misma.
+- **Genericidad $\neq$ convergencia garantizada:** el Meta-Teorema 1 dice que el minimizador es único para casi toda $\gamma_0$ (abierto y denso $\mathcal{O}$), no que el descenso en gradiente siempre lo encuentre. Las $\gamma_0$ con $\Delta_{\rm boundary}$ grande no falsifican el teorema: podrían estar en el complemento de $\mathcal{O}$ (que es cerrado y sin interior, pero no vacío).
+
+**Limitación importante:** Este experimento varía la semilla del **dataset** (y por tanto la muestra empírica $\hat{\gamma}_0$), mientras el paper trabaja con la medida de probabilidad verdadera $\gamma_0 \in \mathcal{P}(\mathbb{R}^{d_1})$ (espacio infinito-dimensional). Los resultados son cualitativamente ilustrativos del Meta-Teorema 1, pero no constituyen una verificación formal.
 
 ---
 
@@ -373,7 +404,7 @@ Los cuatro experimentos proporcionan evidencia empírica consistente con los res
 | $\varepsilon > 0$ fuerza la forma de Gibbs en $\nu^*$ | Exp. B3: std($\theta$) decrece con $\varepsilon$ |
 | Condición PL: $\|\nabla J\|^2 \geq 2\mu(J-J^*)$ con $\mu > 0$ | Exp. C: ratio PL $> 0$ en todas las épocas |
 | Convergencia exponencial bajo PL | Exp. C2: decay lineal en escala log |
-| Genericidad del minimizador único (Meta-Teo. 1) | Exp. D: Std$(J^*) \approx 0$ para datos simples |
+| Genericidad del minimizador único (Meta-Teo. 1) | Exp. D: $\Delta_{\rm boundary} \approx 0$ y Std$(J^*) \approx 0$ para $\gamma_0 \in \mathcal{O}$ |
 
 La contribución más importante del paper es la robustez del resultado: **$\varepsilon$ no necesita ser grande** para garantizar la condición PL y la convergencia exponencial. Esto elimina el tradicional dilema entre regularización (que garantiza convergencia pero degrada la solución) y precisión (que da buenas soluciones pero sin garantías). Con cualquier $\varepsilon > 0$, por pequeño que sea, el descenso en gradiente converge exponencialmente al mínimo global.
 
