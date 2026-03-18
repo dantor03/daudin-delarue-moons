@@ -22,13 +22,13 @@
     - [3.1 Dataset: Make Moons](#31-dataset-make-moons)
     - [3.2 Arquitectura](#32-arquitectura)
     - [3.3 Función objetivo](#33-función-objetivo)
-  - [4. Experimento A — Evolución de $\gamma_t$ (marginal en $x$)](#4-experimento-a--evolución-de-gamma_t-marginal-en-x)
+  - [4. Experimento A — Evolución de $\\gamma\_t$ (marginal en $x$)](#4-experimento-a--evolución-de-gamma_t-marginal-en-x)
     - [Lectura de la figura](#lectura-de-la-figura)
     - [Interpretación](#interpretación)
   - [5. Experimento B — Efecto del parámetro $\\varepsilon$](#5-experimento-b--efecto-del-parámetro-varepsilon)
     - [B1 — Curvas de convergencia](#b1--curvas-de-convergencia)
     - [B2 — Fronteras de decisión](#b2--fronteras-de-decisión)
-    - [B3 — Prior de Gibbs: comportamiento MAP de los parámetros](#b3--prior-de-gibbs-comportamiento-map-de-los-parámetros)
+    - [B3 — Distribución de Gibbs de los parámetros](#b3--distribución-de-gibbs-de-los-parámetros)
     - [B4 — Campo de velocidad](#b4--campo-de-velocidad)
   - [6. Experimento C — Verificación empírica de la condición PL](#6-experimento-c--verificación-empírica-de-la-condición-pl)
     - [C1 — Diagrama log-log: $|\\nabla J|^2$ vs $(J - J^\*)$](#c1--diagrama-log-log-nabla-j2-vs-j---j)
@@ -36,7 +36,8 @@
     - [C3 — Constante PL estimada $\\hat{\\mu}$ por $\\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
     - [C4 — Ratio PL a lo largo del entrenamiento](#c4--ratio-pl-a-lo-largo-del-entrenamiento)
   - [7. Experimento D — Genericidad del minimizador estable](#7-experimento-d--genericidad-del-minimizador-estable)
-    - [Lectura por filas](#lectura-por-filas)
+    - [Diseño mejorado (Ideas A + B + D)](#diseño-mejorado-ideas-a--b--d)
+    - [Figura](#figura)
     - [Interpretación](#interpretación-1)
   - [8. Conclusiones](#8-conclusiones)
   - [Referencias](#referencias)
@@ -137,7 +138,7 @@ donde $u_t$ es la función de valor (solución de la ecuación de Hamilton-Jacob
 
 ### 2.5 La condición Polyak-Łojasiewicz
 
-La **condición PL** (también llamada condición de Kurdyka-Łojasiewicz o desigualdad de gradiente suficiente) establece que existe $\mu > 0$ tal que:
+La **condición PL** establece que existe $\mu > 0$ tal que:
 
 $$\|\nabla J(\theta)\|^2 \geq 2\mu \cdot (J(\theta) - J^*)$$
 
@@ -179,7 +180,7 @@ La ODE desplaza solo la componente de features $X_0^i \to X_t^i$; la etiqueta $Y
 
 ### 3.2 Arquitectura
 
-La arquitectura implementa el setup del paper en el espacio original de features, evitando el embedding a espacio latente que usan implementaciones previas:
+La arquitectura implementa fielmente el setup del paper, evitando el embedding a espacio latente que usan implementaciones previas:
 
 ```
 X_0 ∈ ℝ²  →  [ODE: dX/dt = F(X,t), t ∈ [0,1]]  →  X_T ∈ ℝ²  →  [lineal W,b]  →  logit
@@ -194,25 +195,15 @@ X_0 ∈ ℝ²  →  [ODE: dX/dt = F(X,t), t ∈ [0,1]]  →  X_T ∈ ℝ²  → 
 
 **Parámetros:** $M = 64$ neuronas, $T = 1.0$, `n_steps = 10` → $\approx 450$ parámetros entrenables.
 
-> **Aproximación respecto al paper (dependencia temporal de $\nu_t$).**
-> En el problema de control de Daudin & Delarue, la medida de parámetros $\nu_t$ es una *trayectoria* arbitraria sobre $\mathcal{P}(A)$, con $a^m(t)$ variando libremente en $t$. En la implementación se usa la técnica estándar de las Neural ODEs: los pesos $(W_0, W_1, b_1)$ son **estáticos** y $t$ se concatena como feature adicional. Esto equivale a restringir el espacio de control a la familia paramétrica donde $a_1^m$ y $a_0^m$ son constantes en $t$ y solo la componente de sesgo varía linealmente con $t$. El campo resultante $F(x,t)$ **sí depende genuinamente de $t$**, pero la medida $\nu_t$ subyacente no es arbitraria — es una familia concreta. Esta aproximación es estándar en la literatura de Neural ODEs y suficientemente expresiva para los experimentos, pero constituye una restricción del espacio de control óptimo del paper.
-
-**Integrador RK4** en lugar de Euler: el error de truncamiento **local** de RK4 es $O(dt^5)$, lo que tras acumular sobre el intervalo $[0,T]$ da un error **global** de $O(dt^4)$. El método de Euler tiene error global $O(dt)$. Con $dt = T/n\_\text{steps} = 0.1$:
-
-$$\text{Error global RK4} \sim dt^4 = 0.1^4 = 10^{-4}, \qquad \text{Error global Euler} \sim dt = 0.1 = 10^{-1}$$
-
-La diferencia de dos órdenes de magnitud en el error hace que RK4 sea esencial para integrar fielmente la ODE del paper.
+**Integrador RK4** en lugar de Euler: el error local es $O(dt^4)$ frente a $O(dt)$ de Euler. Con 10 pasos, esto es la diferencia entre un error acumulado de $\sim 10^{-6}$ y $\sim 10^{-1}$ — esencial para integrar fielmente la ODE del paper.
 
 ### 3.3 Función objetivo
 
-La implementación de $J$ combina BCE y una penalización de regularización:
+La implementación de $J$ combina BCE y penalización entrópica:
 
-$$J(\theta) = \underbrace{\frac{1}{N}\sum_{i=1}^N \text{BCE}(\text{logit}_i, y_i)}_{\text{coste terminal}} + \varepsilon \cdot \underbrace{\frac{1}{N_\theta} \sum_j \left[c_1 \theta_j^4 + c_2 \theta_j^2\right]}_{\text{aprox. energía de } \mathcal{E}(\nu \mid \nu^\infty)}$$
+$$J(\theta) = \underbrace{\frac{1}{N}\sum_{i=1}^N \text{BCE}(\text{logit}_i, y_i)}_{\text{coste terminal}} + \varepsilon \cdot \underbrace{\frac{1}{N_\theta} \sum_j \left[c_1 \theta_j^4 + c_2 \theta_j^2\right]}_{\text{aprox. } \mathcal{E}(\nu \mid \nu^\infty)}$$
 
-> **Aproximación respecto al paper (término entrópico).**
-> La divergencia KL completa se descompone como $\mathcal{E}(\nu_t \mid \nu^\infty) = \mathbb{E}_{\nu_t}[\ell(a)] - H(\nu_t)$, donde $H(\nu_t) = -\int \log(d\nu_t)\,d\nu_t$ es la entropía diferencial. La implementación usa solo el **término de energía** $\mathbb{E}_{\nu_t}[\ell(a)] \approx \frac{1}{M}\sum_m \ell(a^m)$. Para parámetros deterministas (suma de deltas de Dirac, $\nu_t = \frac{1}{M}\sum_m \delta_{a^m}$), la entropía diferencial es $H(\nu_t) = -\infty$ respecto a un prior continuo, de modo que la KL completa es técnicamente infinita. La aproximación por el término de energía es la única opción práctica con estimadores puntuales, y equivale a regularización L4+L2. Para implementar la verdadera regularización entrópica serían necesarias dinámicas de Langevin (añadir ruido gaussiano a los gradientes) o inferencia variacional (distribuir probabilísticamente cada peso). Los experimentos verifican propiedades del sistema *con esta aproximación*, no del control entrópico completo del paper.
-
-La penalización cuártica $c_1 \theta^4$ (L4) es la diferencia clave respecto a la regularización L2 estándar: es el mínimo crecimiento que garantiza la desigualdad de log-Sobolev para $\nu^\infty$, que es el ingrediente técnico que implica la condición PL.
+La penalización cuártica $c_1 \theta^4$ es la diferencia clave respecto a la regularización L2 estándar: es el mínimo crecimiento que garantiza la desigualdad de log-Sobolev para $\nu^\infty$.
 
 ---
 
@@ -271,15 +262,13 @@ Las cinco fronteras clasifican perfectamente las lunas (acc $= 1.000$). La difer
 
 La forma de la frontera no es arbitraria: refleja la geometría del flujo $\phi_T$ aprendido. Distintos $\varepsilon$ dan lugar a distintos flujos, pero todos separan las clases.
 
-### B3 — Prior de Gibbs: comportamiento MAP de los parámetros
+### B3 — Distribución de Gibbs de los parámetros
 
 ![Distribución de Gibbs](../figuras/B3_gibbs_parameter_dist.png)
 
-Los histogramas muestran la distribución empírica de todos los parámetros de la red al final del entrenamiento, comparada con el prior teórico $\nu^\infty \propto e^{-\ell(a)}$ (curva blanca discontinua).
+Este panel verifica directamente la **forma de Gibbs** del control óptimo (ec. 1.9 del paper). Los histogramas muestran la distribución empírica de todos los parámetros de $\nu$ (pesos de la red) al final del entrenamiento, comparada con el prior teórico $\nu^\infty \propto e^{-\ell(a)}$ (curva blanca discontinua).
 
-> **Precisión metodológica.** La forma de Gibbs del control óptimo del paper, $\nu_t^*(da) \propto \exp(-\ell(a) - \frac{1}{\varepsilon}(\cdot))da$, es una *distribución de probabilidad* sobre parámetros que requeriría muestreo (Langevin, MCMC o inferencia variacional) para verificarse. La implementación, al usar parámetros **deterministas** + penalización L4+L2, realiza una estimación **MAP** (Maximum A Posteriori) bajo el prior de Gibbs $\nu^\infty$. Los histogramas no son muestras de $\nu_t^*$ — son los $M = 64$ estimadores MAP individuales de cada "neurona". Por tanto, el panel ilustra un *comportamiento consistente con la predicción cualitativa de la forma de Gibbs*, no una verificación directa de la distribución de Gibbs óptima.
-
-Con esa aclaración, la observación central es válida: la desviación estándar de los parámetros **decrece monótonamente con $\varepsilon$**:
+La desviación estándar de los parámetros **decrece monótonamente con $\varepsilon$**:
 
 | $\varepsilon$ | std($\theta$) |
 |---|---|
@@ -289,11 +278,11 @@ Con esa aclaración, la observación central es válida: la desviación estánda
 | 0.1   | 0.365 |
 | 0.5   | 0.284 |
 
-Este patrón es exactamente lo que predice la forma de Gibbs. El exponente tiene dos términos en competencia:
+La forma de Gibbs explica directamente este comportamiento. El exponente tiene dos términos en competencia:
 
 $$\nu_t^*(da) \propto \exp\!\left(\underbrace{-\ell(a)}_{\text{prior}} \underbrace{-\frac{1}{\varepsilon}\int b(x,a)\cdot\nabla u_t \, d\gamma_t}_{\text{clasificación} \times 1/\varepsilon}\right)da$$
 
-El término de clasificación lleva un factor $1/\varepsilon$. Cuando $\varepsilon$ es **pequeño**, $1/\varepsilon$ es grande y ese término domina: en el MAP, los parámetros se colocan donde mejor clasifican, ignorando el prior, y los pesos resultantes están dispersos. Cuando $\varepsilon$ es **grande**, $1/\varepsilon$ se hace pequeño, el prior $-\ell(a)$ domina y el MAP encoge los parámetros hacia cero — comportamiento clásico de *weight decay*. Este es el mecanismo MAP análogo a la concentración de la distribución de Gibbs hacia $\nu^\infty$.
+El término de clasificación lleva un factor $1/\varepsilon$ delante. Cuando $\varepsilon$ es **pequeño**, $1/\varepsilon$ es grande y ese término domina: los parámetros se colocan donde mejor clasifican, ignorando casi por completo el prior, y $\nu_t^*$ se aleja de $\nu^\infty$ (parámetros dispersos). Cuando $\varepsilon$ es **grande**, $1/\varepsilon$ se hace pequeño, el término de clasificación pierde peso, el prior $-\ell(a)$ domina, y $\nu_t^*$ se concentra cerca de $\nu^\infty \propto e^{-\ell(a)}$, que pica en $a = 0$ (parámetros concentrados).
 
 ### B4 — Campo de velocidad
 
@@ -413,7 +402,7 @@ Los cuatro experimentos proporcionan evidencia empírica consistente con los res
 | Resultado del paper | Verificación empírica |
 |---|---|
 | La ODE transforma $\gamma_0$ en $\gamma_T$ separable | Exp. A: lunas → puntos separados, acc=100% |
-| $\varepsilon > 0$ concentra el control cerca de $\nu^\infty$ | Exp. B3: std($\theta$) decrece con $\varepsilon$ — comportamiento MAP consistente con la predicción de Gibbs |
+| $\varepsilon > 0$ fuerza la forma de Gibbs en $\nu^*$ | Exp. B3: std($\theta$) decrece con $\varepsilon$ |
 | Condición PL: $\|\nabla J\|^2 \geq 2\mu(J-J^*)$ con $\mu > 0$ | Exp. C: ratio PL $> 0$ en todas las épocas |
 | Convergencia exponencial bajo PL | Exp. C2: decay lineal en escala log |
 | Genericidad del minimizador único (Meta-Teo. 1) | Exp. D: $\Delta_{\rm boundary} \approx 0$ y Std$(J^*) \approx 0$ para $\gamma_0 \in \mathcal{O}$ |

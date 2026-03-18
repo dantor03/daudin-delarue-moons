@@ -397,7 +397,8 @@ class MeanFieldResNet(nn.Module):
         Avanza un paso de la ODE dX/dt = F(X,t) usando el método de Runge-Kutta 4.
 
         El método RK4 evalúa el campo en 4 puntos intermedios (k1..k4) y combina
-        con pesos [1,2,2,1]/6 para obtener error local O(dt⁴) vs O(dt) de Euler:
+        con pesos [1,2,2,1]/6 para obtener error local O(dt⁵) [global O(dt⁴)]
+        frente a error local O(dt²) [global O(dt)] de Euler:
             k1 = F(x,         t)
             k2 = F(x + dt/2·k1, t+dt/2)
             k3 = F(x + dt/2·k2, t+dt/2)
