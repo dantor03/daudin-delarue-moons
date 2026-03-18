@@ -192,21 +192,28 @@ def get_moons(n=400, noise=0.12, seed=SEED):
 #  σ(·) es la activación no lineal, y a₀ reescala la salida en ℝ^{d₁}.
 #
 #  Con M "partículas" (aproximación de ν_t por M muestras discretas aᵐ):
-#      F(x, t) = ∫_A b(x,a) dν_t(a) ≈ (1/M) Σₘ b(x, aᵐ)
-#              = (1/M) Σₘ σ(a₁ᵐ·x + a₂ᵐ) · a₀ᵐ
+#      F(x, t) = ∫_A b(x,a) dν_t(a) ≈ (1/M) Σₘ b(x, aᵐ(t))
+#              = (1/M) Σₘ σ(a₁ᵐ(t)·x + a₂ᵐ(t)) · a₀ᵐ(t)
 #
-#  Esto es exactamente una red neuronal de 1 capa oculta con M neuronas,
-#  donde los pesos varían en t (→ red temporal = Neural ODE).
+#  Esto es una red neuronal de 1 capa oculta con M neuronas con parámetros
+#  que deberían variar libremente en t.  El paper optimiza sobre trayectorias
+#  arbitrarias (ν_t)_{t∈[0,T]}, lo que en M partículas equivale a optimizar
+#  M caminos aᵐ : [0,T] → A.
 #
-#  Implementación matricial (más eficiente):
-#      W₁ ∈ ℝ^{M×(d₁+1)} agrupa todos los (a₁ᵐ, a₂ᵐ) como filas
-#      W₀ ∈ ℝ^{M×d₁}     agrupa todos los a₀ᵐ como filas
-#      h = σ( [x, t] @ W₁ᵀ + b₁ )   → (N, M)   ← t augmentado ≡ a(t)
-#      F = h @ W₀ᵀ / M               → (N, d₁)  ← el /M absorbido en init
+#  APROXIMACIÓN POR AUGMENTACIÓN TEMPORAL:
+#      En la implementación los pesos (W₁, W₀) son ESTÁTICOS y t se concatena
+#      al input, de modo que el campo efectivo es:
+#          F(x,t) = W₀ tanh(W₁[:,​:d₁] x + W₁[:,d₁] t + b₁)
+#      Esto equivale a restringir la familia de controles a aquellos donde
+#      a₀ᵐ y a₁ᵐ son CONSTANTES en t, y a₂ᵐ(t) = W₁[m,d₁]·t + b₁[m] varía
+#      linealmente.  El campo F(x,t) SÍ depende de t, pero la trayectoria
+#      de ν_t está restringida a esta familia paramétrica concreta.
 #
-#  El tiempo t se AUGMENTA al input (en lugar de usar parámetros distintos
-#  por capa) porque permite que a(t) varíe continuamente, lo que es más
-#  fiel al límite continuo del paper que una discretización en capas fijas.
+#  Implementación matricial:
+#      W₁ ∈ ℝ^{M×(d₁+1)} agrupa (a₁ᵐ, col_temporal) como filas
+#      W₀ ∈ ℝ^{M×d₁}     agrupa a₀ᵐ como filas
+#      h = σ( [x, t] @ W₁ᵀ + b₁ )   → (N, M)
+#      F = h @ W₀ᵀ / M               → (N, d₁)   ← /M absorbido en init
 #
 #  Activación tanh: satisface la "propiedad discriminante" (sec. 1.2) que
 #  garantiza que el campo b(x,·) puede aproximar cualquier función continua.
@@ -284,30 +291,38 @@ class MeanFieldVelocity(nn.Module):
 
     def entropic_penalty(self, c1: float = 0.05, c2: float = 0.5) -> torch.Tensor:
         """
-        Aproximación discreta de la penalización entrópica ε · E(ν_t | ν^∞).
+        Aproximación de la penalización entrópica ε · E(ν_t | ν^∞).
 
-        En el paper, E(ν_t | ν^∞) = ∫ log(ν_t/ν^∞) dν_t es la divergencia KL
-        entre la distribución de parámetros aprendida ν_t y el prior ν^∞.
-        Minimizar J + ε·KL fuerza a ν_t a parecerse a ν^∞ ∝ exp(-ℓ(a)).
+        TEORÍA (paper):
+            E(ν_t | ν^∞) = KL(ν_t || ν^∞) = ∫ log(dν_t/dν^∞) dν_t
+                          = E_{ν_t}[ℓ(a)] − H(ν_t)
+            donde ℓ(a) = c₁|a|⁴ + c₂|a|² y H(ν_t) = −∫log(dν_t)dν_t es la
+            entropía diferencial de ν_t.
 
-        En la aproximación de M partículas, minimizar la KL equivale (en el
-        gradiente) a añadir la penalización del potencial ℓ(a) evaluado en
-        cada parámetro θⱼ del modelo:
+        LIMITACIÓN DE LA IMPLEMENTACIÓN:
+            Los parámetros son estimadores PUNTUALES (deterministicos), por lo
+            que ν_t = (1/M) Σₘ δ_{θₘ} es una suma de deltas de Dirac.  La
+            entropía diferencial de una medida discreta es −∞ respecto a un
+            prior continuo → la KL completa es técnicamente +∞.
 
-            Penalización ≈ (1/N_params) Σⱼ ℓ(θⱼ)
-                         = (1/N_params) Σⱼ [c₁ θⱼ⁴ + c₂ θⱼ²]
+            Solo es accesible el TÉRMINO DE ENERGÍA:
+                E_{ν_t}[ℓ(a)] ≈ (1/N_params) Σⱼ [c₁ θⱼ⁴ + c₂ θⱼ²]
 
-        La normalización por N_params hace el valor comparable entre arquitecturas
-        de distintos tamaños.
+            Esta aproximación es equivalente a regularización L4+L2 (weight
+            decay polinomial) y es el sustituto práctico estándar para la KL
+            cuando se usan estimadores puntuales en lugar de distribuciones.
+            Para la verdadera regularización entrópica sería necesario usar
+            dinámicas de Langevin (ruido en el gradiente) o inferencia
+            variacional (distribuir probabilísticamente cada peso).
 
         Elección de hiperparámetros (Assumption Regularity (i)):
-            c₁ = 0.05 — término cuártico (supercoercividad)
+            c₁ = 0.05 — término cuártico (supercoercividad: garantiza log-Sobolev)
             c₂ = 0.5  — término cuadrático (convexidad básica)
-        El término c₁|a|⁴ es ESENCIAL: c₂|a|² solo sería cuadrático (L2
-        regular) y no garantiza la desigualdad log-Sobolev necesaria para PL.
+        El término c₁|a|⁴ es ESENCIAL: c₂|a|² solo garantiza convexidad
+        cuadrática (L2), pero no la desigualdad log-Sobolev que implica PL.
 
         Returns:
-            Escalar — penalización media por parámetro
+            Escalar — término de energía medio por parámetro (aprox. de KL)
         """
         pen, n = torch.tensor(0.0, device=next(self.parameters()).device), 0
         for p in self.parameters():
@@ -337,10 +352,14 @@ class MeanFieldVelocity(nn.Module):
 #
 #  INTEGRACIÓN RK4 vs EULER:
 #      El paper trabaja con el flujo continuo (tiempo continuo), cuya
-#      discretización más fiel es RK4.  Euler introduce error O(dt),
-#      RK4 introduce error O(dt⁴) — con n_steps=10 pasos, RK4 es mucho
-#      más preciso sin aumentar el número de pasos.  Las 4 evaluaciones
-#      del campo por paso (k1..k4) permiten capturar mejor la curvatura.
+#      discretización más fiel es RK4.
+#        • Euler: error local O(dt²), error GLOBAL acumulado O(dt)
+#        • RK4:   error local O(dt⁵), error GLOBAL acumulado O(dt⁴)
+#      Con dt = T/n_steps = 0.1:
+#        • Error global RK4  ~ dt⁴ = 10⁻⁴  (cuatro órdenes de magnitud)
+#        • Error global Euler ~ dt  = 10⁻¹
+#      Las 4 evaluaciones del campo por paso (k1..k4) capturan mejor
+#      la curvatura del flujo sin aumentar el número de pasos.
 # =============================================================================
 class MeanFieldResNet(nn.Module):
     """
