@@ -181,7 +181,7 @@ La ODE desplaza solo la componente de features $X_0^i \to X_t^i$; la etiqueta $Y
 
 ### 3.2 Arquitectura
 
-La arquitectura implementa el setup del paper en el espacio original de features, evitando el embedding a espacio latente que usan implementaciones previas:
+La arquitectura implementa el setup del paper:
 
 ```
 X_0 ∈ ℝ²  →  [ODE: dX/dt = F(X,t), t ∈ [0,1]]  →  X_T ∈ ℝ²  →  [lineal W,b]  →  logit
@@ -424,7 +424,7 @@ La figura tiene cuatro paneles:
 
 - **Genericidad $\neq$ convergencia garantizada:** el Meta-Teorema 1 dice que el minimizador es único para casi toda $\gamma_0$ (abierto y denso $\mathcal{O}$), no que el descenso en gradiente siempre lo encuentre. Las $\gamma_0$ con $\Delta_{\rm boundary}$ grande no falsifican el teorema: podrían estar en el complemento de $\mathcal{O}$ (que es cerrado y sin interior, pero no vacío).
 
-**Limitación importante:** Este experimento varía la semilla del **dataset** (y por tanto la muestra empírica $\hat{\gamma}_0$), mientras el paper trabaja con la medida de probabilidad verdadera $\gamma_0 \in \mathcal{P}(\mathbb{R}^{d_1})$ (espacio infinito-dimensional). Los resultados son cualitativamente ilustrativos del Meta-Teorema 1, pero no constituyen una verificación formal.
+**Limitación importante:** Este experimento varía la semilla del **dataset** (y por tanto la muestra empírica $\hat{\gamma}_0$), mientras el paper trabaja con la medida de probabilidad verdadera $\gamma_0 \in \mathcal{P}(\mathbb{R}^{d_1} \times \mathbb{R}^{d_2})$ (espacio infinito-dimensional). Los resultados son cualitativamente ilustrativos del Meta-Teorema 1, pero no constituyen una verificación formal.
 
 ---
 
