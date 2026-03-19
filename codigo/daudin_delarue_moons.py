@@ -92,8 +92,6 @@ EXPERIMENTOS IMPLEMENTADOS
                     forma de Gibbs de ν*, campo de velocidad.
   C : Verificación empírica de PL.  Objetivo: confirmar que
                     ‖∇J‖² ≥ 2μ(J-J*) con μ > 0 durante todo el entrenamiento.
-  D : Genericidad.  Objetivo: mostrar que distintas
-                    inicializaciones convergen al mismo J* (Meta-Teorema 1).
 =============================================================================
 """
 
@@ -1185,292 +1183,6 @@ def experiment_C(results_eps: dict):
 
 
 # =============================================================================
-# EXPERIMENTO D — Bonus
-#   Genericidad del minimizador estable (Meta-Teorema 1)
-# =============================================================================
-def experiment_D(n_datasets: int = 8, n_inits: int = 3,
-                 noise: float = 0.12,
-                 min_epochs: int = 300, max_epochs: int = 800,
-                 grad_tol: float = 5e-5):
-    """
-    Bonus: Genericidad del minimizador estable (Meta-Teorema 1).
-
-    META-TEOREMA 1 (paper, sec. 1.3):
-        Para un conjunto abierto y denso 𝒪 de condiciones iniciales γ₀ ∈ P(ℝ^{d₁}×ℝ^{d₂})
-        (distribuciones CONJUNTAS features×etiquetas, en la topología de
-        convergencia débil), el problema de control tiene un único minimizador ESTABLE.
-
-        "Abierto y denso" = "genérico": casi toda γ₀ cumple la propiedad,
-        salvo un conjunto de medida nula y sin interior.
-
-    DISEÑO:
-        Variar γ₀ via semilla del dataset:
-            Se generan n_datasets datasets make_moons con el MISMO ruido pero
-            distintas semillas aleatorias → cada uno es una γ₀ diferente.
-            Esto es más limpio que variar el ruido, porque no mezcla la
-            dificultad intrínseca de la tarea con la variación de γ₀.
-
-        Criterio de convergencia adaptativo:
-            En lugar de fijar un número de épocas, se para cuando
-            ‖∇J‖² < grad_tol durante patience=5 épocas consecutivas
-            (con un mínimo de min_epochs).  Esto asegura que todos los modelos
-            han convergido realmente, no solo que han "agotado" su presupuesto.
-
-        Métrica de distancia de frontera (Δ_boundary):
-            Para cada γ₀, se miden las fronteras de decisión de todas las
-            inicializaciones como la desviación media entre las salidas del
-            clasificador en una rejilla.  Δ_boundary pequeño → todas las
-            inicializaciones encuentran la MISMA frontera → minimizador único.
-
-                Δ_boundary(γ₀) = mean_{i≠j} ‖σ(m_i(grid)) − σ(m_j(grid))‖_F / √n_grid
-
-            Esta métrica captura la variabilidad geométrica, no solo la
-            variabilidad escalar de J*.
-
-    FIGURA (2×2):
-        (0,0) Barras de J* — grupos por dataset, barras por inicialización
-        (0,1) Δ_boundary (eje izquierdo) y Std(J*) (eje derecho) por γ₀
-        (1,0) Fronteras superpuestas para la γ₀ con Δ mínimo (más genérica)
-        (1,1) Fronteras superpuestas para la γ₀ con Δ máximo (menos genérica)
-
-    Args:
-        n_datasets : número de γ₀ distintas (semillas del dataset)
-        n_inits    : inicializaciones aleatorias por γ₀
-        noise      : nivel de ruido fijo para make_moons
-        min_epochs : épocas mínimas antes de comprobar convergencia
-        max_epochs : límite máximo de épocas (seguridad)
-        grad_tol   : umbral de ‖∇J‖² para declarar convergencia
-    """
-    PATIENCE = 5   # épocas consecutivas con ‖∇J‖² < grad_tol para parar
-
-    print("\n" + "=" * 62)
-    print("EXPERIMENTO D  —  Genericidad del minimizador  (Bonus)")
-    print("=" * 62)
-    print(f"  n_datasets={n_datasets}, n_inits={n_inits}, noise={noise}")
-    print(f"  Criterio parada: ‖∇J‖² < {grad_tol:.0e} por {PATIENCE} épocas")
-    print(f"  Épocas: [{min_epochs}, {max_epochs}]")
-    print()
-
-    # ── Rejilla 2D para evaluar fronteras de decisión ─────────────────────────
-    xx, yy  = np.meshgrid(np.linspace(-2.5, 2.5, 80),
-                          np.linspace(-2.5, 2.5, 80))
-    grid_np = np.c_[xx.ravel(), yy.ravel()].astype(np.float32)
-    grid_t  = torch.tensor(grid_np, device=DEVICE)
-    n_grid  = grid_np.shape[0]
-
-    # ── Bucle principal: un dataset por γ₀ ────────────────────────────────────
-    # all_J[d][i]     = J* del init i en dataset d
-    # all_logits[d][i] = array (n_grid,) de σ(modelo) en la rejilla
-    all_J      = []
-    all_logits = []
-
-    ds_seeds = [SEED + k * 17 for k in range(n_datasets)]
-    init_colors_base = plt.cm.plasma(np.linspace(0.1, 0.9, n_inits))
-
-    for d_idx, ds_seed in enumerate(ds_seeds):
-        X_np, y_np = make_moons(n_samples=400, noise=noise,
-                                random_state=ds_seed)
-        X_np = StandardScaler().fit_transform(X_np).astype(np.float32)
-        X_t  = torch.tensor(X_np, device=DEVICE)
-        y_t  = torch.tensor(y_np.astype(np.float32), device=DEVICE)
-
-        J_list = []
-        logits_list = []
-
-        for i_init in range(n_inits):
-            torch.manual_seed(i_init * 31 + 7)
-            m   = MeanFieldResNet(d1=2, M=64, T=1.0, n_steps=10).to(DEVICE)
-            opt = optim.Adam(m.parameters(), lr=0.005)
-            sch = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max_epochs)
-
-            consec_ok = 0  # épocas consecutivas con ‖∇J‖² < grad_tol
-            final_loss = None
-
-            for ep in range(max_epochs):
-                m.train(); opt.zero_grad()
-                loss, _, _ = m.compute_loss(X_t, y_t, epsilon=0.01)
-                loss.backward()
-
-                # Norma cuadrada del gradiente para criterio PL / parada
-                grad_sq = sum(
-                    p.grad.detach().norm() ** 2
-                    for p in m.parameters() if p.grad is not None
-                ).item()
-
-                nn.utils.clip_grad_norm_(m.parameters(), 5.0)
-                opt.step(); sch.step()
-                final_loss = loss.item()
-
-                # Criterio de parada adaptativo (solo tras min_epochs)
-                if ep >= min_epochs:
-                    if grad_sq < grad_tol:
-                        consec_ok += 1
-                    else:
-                        consec_ok = 0
-                    if consec_ok >= PATIENCE:
-                        break  # convergencia alcanzada
-
-            J_list.append(final_loss)
-
-            # Evaluar frontera de decisión en la rejilla
-            m.eval()
-            with torch.no_grad():
-                logits = torch.sigmoid(m(grid_t)).cpu().numpy().ravel()
-            logits_list.append(logits)
-
-        all_J.append(J_list)
-        all_logits.append(logits_list)
-
-        std_val = np.std(J_list)
-        print(f"  γ₀={d_idx+1} (seed={ds_seed}) | "
-              f"J* ∈ [{np.min(J_list):.5f}, {np.max(J_list):.5f}] | "
-              f"Std={std_val:.6f}")
-
-    # ── Métricas por dataset ──────────────────────────────────────────────────
-    std_J    = np.array([np.std(j) for j in all_J])
-    # Δ_boundary: desviación media entre pares de fronteras
-    delta_bd = np.zeros(n_datasets)
-    for d_idx in range(n_datasets):
-        lg = all_logits[d_idx]          # lista de n_inits arrays (n_grid,)
-        if n_inits < 2:
-            delta_bd[d_idx] = 0.0
-            continue
-        diffs = []
-        for i in range(n_inits):
-            for j in range(i + 1, n_inits):
-                diffs.append(np.linalg.norm(lg[i] - lg[j]) / np.sqrt(n_grid))
-        delta_bd[d_idx] = np.mean(diffs)
-
-    best_d  = int(np.argmin(delta_bd))   # γ₀ más genérica  (Δ mínimo)
-    worst_d = int(np.argmax(delta_bd))   # γ₀ menos genérica (Δ máximo)
-
-    print(f"\n  Δ_boundary: min={delta_bd[best_d]:.5f} (γ₀={best_d+1}), "
-          f"max={delta_bd[worst_d]:.5f} (γ₀={worst_d+1})")
-    print(f"  Std(J*):    min={std_J.min():.5f}, max={std_J.max():.5f}")
-
-    # ── Figura ────────────────────────────────────────────────────────────────
-    fig = plt.figure(figsize=(14, 11))
-    fig.patch.set_facecolor(DARK_BG)
-    gs  = fig.add_gridspec(2, 2, hspace=0.42, wspace=0.35)
-
-    ax_bar  = fig.add_subplot(gs[0, 0])   # (0,0) barras J*
-    ax_met  = fig.add_subplot(gs[0, 1])   # (0,1) Δ_boundary + Std(J*)
-    ax_best = fig.add_subplot(gs[1, 0])   # (1,0) fronteras γ₀ mejor
-    ax_wrst = fig.add_subplot(gs[1, 1])   # (1,1) fronteras γ₀ peor
-
-    # — (0,0) Barras J* agrupadas por dataset ─────────────────────────────────
-    group_w = 0.8
-    bar_w   = group_w / n_inits
-    x_base  = np.arange(n_datasets)
-    for i_init in range(n_inits):
-        offsets = x_base - group_w / 2 + bar_w * (i_init + 0.5)
-        vals    = [all_J[d][i_init] for d in range(n_datasets)]
-        ax_bar.bar(offsets, vals, width=bar_w * 0.9,
-                   color=init_colors_base[i_init],
-                   edgecolor='none', label=f'Init {i_init+1}')
-    ax_bar.set_xticks(x_base)
-    ax_bar.set_xticklabels([f'γ₀={d+1}' for d in range(n_datasets)],
-                           fontsize=7, color=TXT)
-    style_ax(ax_bar,
-             r'$J^*$ final  —  distintas $\gamma_0$ e inicializaciones',
-             r'Dataset $\gamma_0$', r'$J^*$')
-    ax_bar.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7,
-                  loc='upper right')
-
-    # — (0,1) Δ_boundary (izquierda) + Std(J*) (derecha) ────────────────────
-    c_delta = '#ff7f50'  # coral
-    c_std   = '#87cefa'  # azul claro
-    ax_met.bar(x_base, delta_bd, color=c_delta, alpha=0.8,
-               edgecolor='none', label=r'$\Delta_{\rm boundary}$')
-    ax_met.set_xticks(x_base)
-    ax_met.set_xticklabels([f'γ₀={d+1}' for d in range(n_datasets)],
-                           fontsize=7, color=TXT)
-    style_ax(ax_met,
-             r'Variabilidad de frontera $\Delta_{\rm boundary}$ y Std$(J^*)$'
-             '\n'
-             r'Ambas métricas $\to 0$ verifican unicidad del minimizador',
-             r'Dataset $\gamma_0$',
-             r'$\Delta_{\rm boundary}$')
-
-    ax_std = ax_met.twinx()
-    ax_std.plot(x_base, std_J, color=c_std, marker='D',
-                lw=1.8, ms=5, label=r'Std$(J^*)$')
-    ax_std.tick_params(colors=TXT, labelsize=8)
-    ax_std.set_ylabel(r'Std$(J^*)$', color=c_std, fontsize=9)
-    ax_std.spines['right'].set_color(c_std)
-    ax_std.yaxis.label.set_color(c_std)
-
-    # leyenda combinada
-    h1, l1 = ax_met.get_legend_handles_labels()
-    h2, l2 = ax_std.get_legend_handles_labels()
-    ax_met.legend(h1 + h2, l1 + l2, facecolor=PANEL_BG,
-                  labelcolor=TXT, fontsize=8)
-
-    # — Función auxiliar para dibujar fronteras superpuestas ──────────────────
-    def _plot_boundaries(ax, d_idx, label_extra):
-        """Dibuja las n_inits fronteras de decisión para el dataset d_idx."""
-        X_np_d, y_np_d = make_moons(n_samples=400, noise=noise,
-                                    random_state=ds_seeds[d_idx])
-        X_np_d = StandardScaler().fit_transform(X_np_d)
-
-        # Fondo: contorno de la frontera media
-        mean_lg = np.mean(all_logits[d_idx], axis=0).reshape(xx.shape)
-        ax.contourf(xx, yy, mean_lg, levels=50,
-                    cmap='RdBu_r', alpha=0.35, vmin=0, vmax=1)
-
-        # Contorno de decisión por inicialización
-        cmap_bd = plt.cm.plasma(np.linspace(0.1, 0.9, n_inits))
-        for i_init in range(n_inits):
-            lg_i = all_logits[d_idx][i_init].reshape(xx.shape)
-            ax.contour(xx, yy, lg_i, levels=[0.5],
-                       colors=[cmap_bd[i_init]], linewidths=1.5,
-                       linestyles='-', alpha=0.9)
-
-        # Puntos del dataset
-        ax.scatter(X_np_d[y_np_d == 0, 0], X_np_d[y_np_d == 0, 1],
-                   s=8, c=COLOR_C0, alpha=0.6, zorder=5)
-        ax.scatter(X_np_d[y_np_d == 1, 0], X_np_d[y_np_d == 1, 1],
-                   s=8, c=COLOR_C1, alpha=0.6, zorder=5)
-
-        delta_str = f'{delta_bd[d_idx]:.4f}'
-        std_str   = f'{std_J[d_idx]:.4f}'
-        style_ax(ax,
-                 f'Fronteras de decisión — γ₀={d_idx+1}  ({label_extra})\n'
-                 fr'$\Delta_{{\rm boundary}}={delta_str}$,  '
-                 fr'Std$(J^*)={std_str}$',
-                 '$x_1$', '$x_2$')
-
-    _plot_boundaries(ax_best, best_d,
-                     label_extra=r'$\Delta$ mínimo → mayor genericidad')
-    _plot_boundaries(ax_wrst, worst_d,
-                     label_extra=r'$\Delta$ máximo → menor genericidad')
-
-    fig.suptitle(
-        r'Genericidad del minimizador estable  (Meta-Teorema 1)'
-        '\n'
-        r'$n_{\rm datasets}=' + str(n_datasets) + r'$ distribuciones $\gamma_0$'
-        r'  ×  $n_{\rm inits}=' + str(n_inits) + r'$ inicializaciones  '
-        r'—  criterio $\|\nabla J\|^2 < ' + f'{grad_tol:.0e}' + r'$',
-        color=TXT, fontsize=11, fontweight='bold'
-    )
-
-    out = os.path.join(OUTPUT_DIR, 'D_stability_genericity.png')
-    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=DARK_BG)
-    plt.close()
-    print(f"  → {out}")
-
-    print("\n  Interpretación:")
-    print("  • Δ_boundary ≈ 0  →  todas las inicializaciones encuentran la MISMA")
-    print("    frontera de decisión  →  minimizador único para esta γ₀  →  γ₀ ∈ 𝒪")
-    print("  • Std(J*) ≈ 0     →  todos los J* son iguales  (métrica escalar)")
-    print("  • La γ₀ con Δ máximo puede estar en el borde o fuera de 𝒪:")
-    print("    distintas inicializaciones convergen a fronteras DISTINTAS,")
-    print("    coherente con el Meta-Teorema 1 (𝒪 es abierto y denso, no todo ℝ²).")
-    print("  • Criterio adaptativo: cada modelo para cuando ‖∇J‖² converge,")
-    print("    no al agotar un presupuesto fijo → comparación más justa.")
-
-
-# =============================================================================
 # MAIN
 # =============================================================================
 if __name__ == '__main__':
@@ -1492,8 +1204,6 @@ if __name__ == '__main__':
     print("      convergencia, fronteras, forma de Gibbs, campo de velocidad.")
     print("  C → Con los modelos de B ya entrenados, verificamos la condición PL")
     print("      (reutiliza results_eps sin re-entrenar).")
-    print("  D → Finalmente, el experimento de genericidad varía γ₀ (no ε),")
-    print("      lo que lo hace independiente de A/B/C.")
     print()
 
     # A : establece la geometría y sirve de modelo de referencia
@@ -1511,19 +1221,6 @@ if __name__ == '__main__':
     #             de entrenamiento de los modelos ya entrenados en B.
     experiment_C(results_eps)
 
-    # D : Bonus (Meta-Teorema 1): varía γ₀ via semilla del dataset
-    #             n_datasets=8 distribuciones × n_inits=3 inicializaciones.
-    #             Criterio adaptativo: para cuando ‖∇J‖² < 5e-5 (PATIENCE=5).
-    #             Añade métrica Δ_boundary para variabilidad geométrica de frontera.
-    experiment_D(
-        n_datasets=8,
-        n_inits=3,
-        noise=0.12,
-        min_epochs=300,
-        max_epochs=800,
-        grad_tol=5e-5,
-    )
-
     print("\n" + "=" * 65)
     print("  TODOS LOS EXPERIMENTOS COMPLETADOS")
     print()
@@ -1535,7 +1232,6 @@ if __name__ == '__main__':
         'B3_gibbs_parameter_dist.png',
         'B4_velocity_field.png',
         'C_pl_verification.png',
-        'D_stability_genericity.png',
     ]:
         print(f"    {OUTPUT_DIR}/{fname}")
     print("=" * 65)

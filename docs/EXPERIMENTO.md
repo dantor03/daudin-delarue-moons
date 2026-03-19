@@ -36,11 +36,7 @@
     - [C2 — Convergencia exponencial (escala semilog)](#c2--convergencia-exponencial-escala-semilog)
     - [C3 — Constante PL estimada $\\hat{\\mu}$ por $\\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
     - [C4 — Ratio PL a lo largo del entrenamiento](#c4--ratio-pl-a-lo-largo-del-entrenamiento)
-  - [7. Experimento D — Genericidad del minimizador estable](#7-experimento-d--genericidad-del-minimizador-estable)
-    - [Diseño experimental](#diseño-experimental)
-    - [Figura](#figura)
-    - [Interpretación](#interpretación-1)
-  - [8. Conclusiones](#8-conclusiones)
+  - [7. Conclusiones](#7-conclusiones)
   - [Referencias](#referencias)
 
 ---
@@ -375,62 +371,9 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 ---
 
-## 7. Experimento D — Genericidad del minimizador estable
+## 7. Conclusiones
 
-**Objetivo:** Verificar empíricamente el Meta-Teorema 1: que la unicidad del minimizador estable es una propiedad "genérica" (válida para casi toda distribución inicial $\gamma_0$).
-
-### Diseño experimental
-
-El experimento explora si distintas distribuciones iniciales $\gamma_0$ conducen cada una a un único minimizador estable, o si por el contrario distintas inicializaciones de parámetros pueden converger a soluciones geométricamente distintas para la misma $\gamma_0$.
-
-**Variación de $\gamma_0$:**
-Se generan $n_{\rm datasets} = 8$ datasets `make_moons` con el **mismo nivel de ruido** ($\sigma = 0.12$) pero distintas semillas aleatorias. Cada semilla produce una realización diferente de la distribución empírica $\hat{\gamma}_0$, manteniendo constante la dificultad de la tarea de clasificación. Para cada $\hat{\gamma}_0$ se entrenan $n_{\rm inits} = 3$ modelos con semillas de inicialización de parámetros independientes.
-
-**Criterio de convergencia adaptativo:**
-El entrenamiento se detiene cuando la norma cuadrada del gradiente satisface
-
-$$\|\nabla J\|^2 < \delta = 5 \times 10^{-5} \quad \text{durante 5 épocas consecutivas}$$
-
-con un mínimo de 300 épocas y un máximo de 800. Este criterio asegura que todos los modelos han alcanzado un mínimo real y no un plateau transitorio, haciendo la comparación de $J^*$ entre inicializaciones más limpia.
-
-**Métrica de variabilidad geométrica ($\Delta_{\rm boundary}$):**
-La variabilidad escalar $\text{Std}(J^*)$ puede ser pequeña aunque las fronteras de decisión sean geométricamente distintas (dos mínimos con el mismo valor de pérdida pero distinta forma). Para capturar la variabilidad geométrica, se evalúan todos los modelos en una rejilla densa $80 \times 80$ sobre el espacio de features y se calcula:
-
-$$\Delta_{\rm boundary}(\gamma_0) = \frac{1}{\binom{n_{\rm inits}}{2}} \sum_{i < j} \frac{\|\sigma(m_i(\text{grid})) - \sigma(m_j(\text{grid}))\|_F}{\sqrt{n_{\rm grid}}}$$
-
-donde $\sigma$ es la sigmoide y $n_{\rm grid} = 6400$. Si $\Delta_{\rm boundary} \approx 0$, todas las inicializaciones producen la **misma frontera geométrica**, evidencia directa de que el minimizador es único para esa $\gamma_0$.
-
-### Figura
-
-![Genericidad](../figuras/D_stability_genericity.png)
-
-La figura tiene cuatro paneles:
-
-- **(0,0) Barras de $J^*$:** grupos por $\gamma_0$ (8 grupos), barras por inicialización (3 colores). Permite ver qué $\gamma_0$ tienen inicializaciones dispersas y cuáles concentradas.
-
-- **(0,1) $\Delta_{\rm boundary}$ y Std$(J^*)$:** barras en coral para $\Delta_{\rm boundary}$ (eje izquierdo), línea en azul para Std$(J^*)$ (eje derecho). Ambas métricas deben ser pequeñas para afirmar genericidad. El coeficiente entre ambas revela si la variabilidad es escalar (solo $J^*$) o geométrica (fronteras distintas).
-
-- **(1,0) Fronteras superpuestas — $\gamma_0$ con $\Delta$ mínimo:** las 3 fronteras de decisión (contornos de nivel 0.5) se superponen casi perfectamente. El fondo muestra el promedio de las salidas del clasificador. Esta $\gamma_0$ es la "más genérica" del conjunto.
-
-- **(1,1) Fronteras superpuestas — $\gamma_0$ con $\Delta$ máximo:** las 3 fronteras difieren visiblemente entre sí. Esta $\gamma_0$ está más cerca del borde de $\mathcal{O}$ o fuera de él.
-
-### Interpretación
-
-- **$\Delta_{\rm boundary} \approx 0$ y Std$(J^*) \approx 0$:** todas las inicializaciones encuentran la misma solución tanto en valor ($J^*$) como en geometría (frontera). Evidencia de que $\gamma_0 \in \mathcal{O}$ y el minimizador es único.
-
-- **$\Delta_{\rm boundary}$ grande:** distintas inicializaciones convergen a fronteras geométricamente diferentes. Esto puede ocurrir aunque $\text{Std}(J^*)$ sea pequeño (simetría del paisaje) e indica que $\gamma_0$ puede estar fuera de $\mathcal{O}$ o en su frontera.
-
-- **El criterio adaptativo** asegura que las diferencias observadas son genuinas (convergencia real a distintos mínimos) y no artefactos de un presupuesto de épocas insuficiente.
-
-- **Genericidad $\neq$ convergencia garantizada:** el Meta-Teorema 1 dice que el minimizador es único para casi toda $\gamma_0$ (abierto y denso $\mathcal{O}$), no que el descenso en gradiente siempre lo encuentre. Las $\gamma_0$ con $\Delta_{\rm boundary}$ grande no falsifican el teorema: podrían estar en el complemento de $\mathcal{O}$ (que es cerrado y sin interior, pero no vacío).
-
-**Limitación importante:** Este experimento varía la semilla del **dataset** (y por tanto la muestra empírica $\hat{\gamma}_0$), mientras el paper trabaja con la medida de probabilidad verdadera $\gamma_0 \in \mathcal{P}(\mathbb{R}^{d_1} \times \mathbb{R}^{d_2})$ (espacio infinito-dimensional). Los resultados son cualitativamente ilustrativos del Meta-Teorema 1, pero no constituyen una verificación formal.
-
----
-
-## 8. Conclusiones
-
-Los cuatro experimentos proporcionan evidencia empírica consistente con los resultados teóricos de Daudin & Delarue (2025):
+Los tres experimentos proporcionan evidencia empírica consistente con los resultados teóricos de Daudin & Delarue (2025):
 
 | Resultado del paper | Verificación empírica |
 |---|---|
@@ -438,7 +381,6 @@ Los cuatro experimentos proporcionan evidencia empírica consistente con los res
 | $\varepsilon > 0$ concentra el control cerca de $\nu^\infty$ | Exp. B3: std($\theta$) decrece con $\varepsilon$ — MAP consistente con la predicción de Gibbs |
 | Condición PL: $\|\nabla J\|^2 \geq 2\mu(J-J^*)$ con $\mu > 0$ | Exp. C: ratio PL $> 0$ en todas las épocas |
 | Convergencia exponencial bajo PL | Exp. C2: decay lineal en escala log |
-| Genericidad del minimizador único (Meta-Teo. 1) | Exp. D: $\Delta_{\rm boundary} \approx 0$ y Std$(J^*) \approx 0$ para $\gamma_0 \in \mathcal{O}$ |
 
 La contribución más importante del paper es la robustez del resultado: **$\varepsilon$ no necesita ser grande** para garantizar la condición PL y la convergencia exponencial. Esto elimina el tradicional dilema entre regularización (que garantiza convergencia pero degrada la solución) y precisión (que da buenas soluciones pero sin garantías). Con cualquier $\varepsilon > 0$, por pequeño que sea, el descenso en gradiente converge exponencialmente al mínimo global.
 
