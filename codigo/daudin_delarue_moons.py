@@ -86,13 +86,13 @@ DIFERENCIAS RESPECTO AL CÓDIGO PREVIO (claude_1_pytorch.py)
 
 EXPERIMENTOS IMPLEMENTADOS
 --------------------------
-  A — Ideas 1 + 3 : Neural ODE + evolución de γ_t.  Objetivo: ver cómo las
+  A : Neural ODE + evolución de γ_t.  Objetivo: ver cómo las
                     "lunas" se transforman en datos linealmente separables.
-  B — Idea 4      : Efecto de ε.  Objetivo: mostrar convergencia, fronteras,
+  B : Efecto de ε.  Objetivo: mostrar convergencia, fronteras,
                     forma de Gibbs de ν*, campo de velocidad.
-  C — Idea 2      : Verificación empírica de PL.  Objetivo: confirmar que
+  C : Verificación empírica de PL.  Objetivo: confirmar que
                     ‖∇J‖² ≥ 2μ(J-J*) con μ > 0 durante todo el entrenamiento.
-  D — Bonus       : Genericidad.  Objetivo: mostrar que distintas
+  D : Genericidad.  Objetivo: mostrar que distintas
                     inicializaciones convergen al mismo J* (Meta-Teorema 1).
 =============================================================================
 """
@@ -346,7 +346,7 @@ class MeanFieldVelocity(nn.Module):
 #          L(x, y) = BCE(W·x + b, y)   (coste terminal del problema de control)
 #
 #  POR QUÉ ESPACIO ORIGINAL ℝ² (sin embedding):
-#      En el paper, γ_t ∈ P(ℝ^{d₁}) — la distribución vive en el mismo espacio
+#      En el paper, γ_t ∈ P(ℝ^{d₁} x ℝ^{d}) — la distribución vive en el mismo espacio
 #      que los datos. Si embeddiéramos x ∈ ℝ² → h ∈ ℝ^H, la ODE correría en ℝ^H
 #      y γ_t sería no visualizable, alejándose del setup teórico.
 #
@@ -650,12 +650,12 @@ def mu_pl_estimate(hist):
 
 
 # =============================================================================
-# EXPERIMENTO A — Idea 1 + Idea 3
+# EXPERIMENTO A 
 #   Neural ODE con regularización entrópica + evolución de features γ_t
 # =============================================================================
 def experiment_A(n_epochs: int = 800):
     """
-    Ideas 1 + 3: Neural ODE con regularización entrópica + evolución de features γ_t.
+    Neural ODE con regularización entrópica + evolución de features γ_t.
 
     OBJETIVO MATEMÁTICO:
         Mostrar empíricamente que la ODE de campo medio puede transformar una
@@ -689,7 +689,7 @@ def experiment_A(n_epochs: int = 800):
         • acc ≈ 1.0 con ε=0.01, M=64, T=1.0
     """
     print("\n" + "=" * 62)
-    print("EXPERIMENTO A  —  Feature evolution γ_t  (Ideas 1 + 3)")
+    print("EXPERIMENTO A  —  Feature evolution γ_t")
     print("=" * 62)
 
     X, y, X_np, y_np = get_moons()
@@ -819,12 +819,12 @@ def experiment_A(n_epochs: int = 800):
 
 
 # =============================================================================
-# EXPERIMENTO B — Idea 4
+# EXPERIMENTO B 
 #   Efecto del parámetro de regularización entrópica ε
 # =============================================================================
 def experiment_B(epsilons=None, n_epochs: int = 700):
     """
-    Idea 4: Efecto del parámetro de regularización entrópica ε.
+    Efecto del parámetro de regularización entrópica ε.
 
     Todos los modelos se inicializan con la MISMA semilla aleatoria (torch.manual_seed
     antes de cada creación), de forma que la única diferencia entre ellos es ε.
@@ -872,7 +872,7 @@ def experiment_B(epsilons=None, n_epochs: int = 700):
         epsilons = [0.0, 0.001, 0.01, 0.1, 0.5]
 
     print("\n" + "=" * 62)
-    print("EXPERIMENTO B  —  Efecto del parámetro ε  (Idea 4)")
+    print("EXPERIMENTO B  —  Efecto del parámetro ε")
     print("=" * 62)
 
     X, y, X_np, y_np = get_moons()
@@ -1016,12 +1016,12 @@ def experiment_B(epsilons=None, n_epochs: int = 700):
 
 
 # =============================================================================
-# EXPERIMENTO C — Idea 2
+# EXPERIMENTO C 
 #   Verificación empírica de la desigualdad Polyak-Łojasiewicz
 # =============================================================================
 def experiment_C(results_eps: dict):
     """
-    Idea 2: Verificación empírica de la desigualdad Polyak-Łojasiewicz.
+    Verificación empírica de la desigualdad Polyak-Łojasiewicz.
 
     META-TEOREMA 2 (paper, sec. 1.4):
         Para condiciones iniciales γ_0 en un conjunto abierto denso 𝒪 y ε > 0,
@@ -1067,7 +1067,7 @@ def experiment_C(results_eps: dict):
                       generado por experiment_B()
     """
     print("\n" + "=" * 62)
-    print("EXPERIMENTO C  —  Verificación PL  (Idea 2)")
+    print("EXPERIMENTO C  —  Verificación PL")
     print("=" * 62)
 
     epsilons = list(results_eps.keys())
@@ -1203,20 +1203,20 @@ def experiment_D(n_datasets: int = 8, n_inits: int = 3,
         "Abierto y denso" = "genérico": casi toda γ₀ cumple la propiedad,
         salvo un conjunto de medida nula y sin interior.
 
-    DISEÑO (Ideas A + B + D):
-        Idea A — Variar γ₀ via semilla del dataset:
+    DISEÑO:
+        Variar γ₀ via semilla del dataset:
             Se generan n_datasets datasets make_moons con el MISMO ruido pero
             distintas semillas aleatorias → cada uno es una γ₀ diferente.
             Esto es más limpio que variar el ruido, porque no mezcla la
             dificultad intrínseca de la tarea con la variación de γ₀.
 
-        Idea B — Criterio de convergencia adaptativo:
+        Criterio de convergencia adaptativo:
             En lugar de fijar un número de épocas, se para cuando
             ‖∇J‖² < grad_tol durante patience=5 épocas consecutivas
             (con un mínimo de min_epochs).  Esto asegura que todos los modelos
             han convergido realmente, no solo que han "agotado" su presupuesto.
 
-        Idea D — Métrica de distancia de frontera (Δ_boundary):
+        Métrica de distancia de frontera (Δ_boundary):
             Para cada γ₀, se miden las fronteras de decisión de todas las
             inicializaciones como la desviación media entre las salidas del
             clasificador en una rejilla.  Δ_boundary pequeño → todas las
@@ -1496,10 +1496,10 @@ if __name__ == '__main__':
     print("      lo que lo hace independiente de A/B/C.")
     print()
 
-    # A — Idea 1+3: establece la geometría y sirve de modelo de referencia
+    # A : establece la geometría y sirve de modelo de referencia
     experiment_A(n_epochs=800)
 
-    # B — Idea 4: entrena 5 modelos (ε ∈ {0, 0.001, 0.01, 0.1, 0.5}) y
+    # B : entrena 5 modelos (ε ∈ {0, 0.001, 0.01, 0.1, 0.5}) y
     #             genera las 4 figuras B1–B4.
     #             Devuelve results_eps para reutilizar en C sin re-entrenar.
     results_eps = experiment_B(
@@ -1507,11 +1507,11 @@ if __name__ == '__main__':
         n_epochs=700
     )
 
-    # C — Idea 2: verifica empíricamente la desigualdad PL usando el historial
+    # C : verifica empíricamente la desigualdad PL usando el historial
     #             de entrenamiento de los modelos ya entrenados en B.
     experiment_C(results_eps)
 
-    # D — Bonus (Meta-Teorema 1): varía γ₀ via semilla del dataset (Ideas A+B+D)
+    # D : Bonus (Meta-Teorema 1): varía γ₀ via semilla del dataset
     #             n_datasets=8 distribuciones × n_inits=3 inicializaciones.
     #             Criterio adaptativo: para cuando ‖∇J‖² < 5e-5 (PATIENCE=5).
     #             Añade métrica Δ_boundary para variabilidad geométrica de frontera.

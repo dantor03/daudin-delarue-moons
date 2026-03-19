@@ -22,18 +22,18 @@
     - [3.1 Dataset: Make Moons](#31-dataset-make-moons)
     - [3.2 Arquitectura](#32-arquitectura)
     - [3.3 Función objetivo](#33-función-objetivo)
-  - [4. Experimento A — Evolución de $\gamma_{t}$ (marginal en $x$)](#4-experimento-a--evolución-de-gamma_t-marginal-en-x)
+  - [4. Experimento A — Evolución de $\\gamma\_t$ (marginal en $x$)](#4-experimento-a--evolución-de-gamma_t-marginal-en-x)
     - [Lectura de la figura](#lectura-de-la-figura)
     - [Interpretación](#interpretación)
-  - [5. Experimento B — Efecto del parámetro $\varepsilon$](#5-experimento-b--efecto-del-parámetro-varepsilon)
+  - [5. Experimento B — Efecto del parámetro $\\varepsilon$](#5-experimento-b--efecto-del-parámetro-varepsilon)
     - [B1 — Curvas de convergencia](#b1--curvas-de-convergencia)
     - [B2 — Fronteras de decisión](#b2--fronteras-de-decisión)
     - [B3 — Prior de Gibbs: comportamiento MAP de los parámetros](#b3--prior-de-gibbs-comportamiento-map-de-los-parámetros)
     - [B4 — Campo de velocidad](#b4--campo-de-velocidad)
   - [6. Experimento C — Verificación empírica de la condición PL](#6-experimento-c--verificación-empírica-de-la-condición-pl)
-    - [C1 — Diagrama log-log: $|\nabla J|^2$ vs $(J - J^*)$](#c1--diagrama-log-log-nabla-j2-vs-j---j)
+    - [C1 — Diagrama log-log: $|\\nabla J|^2$ vs $(J - J^\*)$](#c1--diagrama-log-log-nabla-j2-vs-j---j)
     - [C2 — Convergencia exponencial (escala semilog)](#c2--convergencia-exponencial-escala-semilog)
-    - [C3 — Constante PL estimada $\hat{\mu}$ por $\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
+    - [C3 — Constante PL estimada $\\hat{\\mu}$ por $\\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
     - [C4 — Ratio PL a lo largo del entrenamiento](#c4--ratio-pl-a-lo-largo-del-entrenamiento)
   - [7. Experimento D — Genericidad del minimizador estable](#7-experimento-d--genericidad-del-minimizador-estable)
     - [Diseño mejorado (Ideas A + B + D)](#diseño-mejorado-ideas-a--b--d)
@@ -269,6 +269,8 @@ La "masa" de datos se conserva y se transporta. El campo $F$ aprendido es el que
 Las cinco fronteras clasifican perfectamente las lunas (acc $= 1.000$). La diferencia es geométrica: mayor $\varepsilon$ produce fronteras más suaves y regulares, mientras que $\varepsilon = 0$ puede producir fronteras más irregulares o sobreajustadas. Esto es el efecto de regularización clásico: $\varepsilon$ controla la complejidad de la solución.
 
 La forma de la frontera no es arbitraria: refleja la geometría del flujo $\phi_T$ aprendido. Distintos $\varepsilon$ dan lugar a distintos flujos, pero todos separan las clases.
+
+**Cómo leer el gráfico.** El fondo de color muestra $P(y=1 \mid x)$ evaluado en una malla densa de 200×200 puntos: rojo intenso indica $P \approx 0$ (el modelo predice clase 0 con alta confianza), azul intenso indica $P \approx 1$ (clase 1 con alta confianza), y los tonos intermedios corresponden a zona de incertidumbre. La línea blanca es siempre la isocurva $P(y=1\mid x) = 0.5$ — la frontera de clasificación propiamente dicha, con el mismo grosor en todos los paneles. Lo que cambia es la **anchura de la zona de transición** entre rojo y azul: para $\varepsilon$ pequeño la transición es abrupta (el modelo es muy seguro en casi todo el espacio y la línea blanca aparece rodeada de colores saturados), mientras que para $\varepsilon$ grande la regularización frena los parámetros y la transición es gradual (banda gris/malva ancha alrededor de la frontera). Esta anchura mide la confianza del modelo: $\varepsilon$ no solo suaviza la frontera geométricamente, sino que también reduce la certeza con la que el modelo asigna probabilidades lejos de ella.
 
 ### B3 — Prior de Gibbs: comportamiento MAP de los parámetros
 
