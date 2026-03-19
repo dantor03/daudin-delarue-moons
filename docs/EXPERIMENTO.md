@@ -29,6 +29,7 @@
     - [B1 — Curvas de convergencia](#b1--curvas-de-convergencia)
     - [B2 — Fronteras de decisión](#b2--fronteras-de-decisión)
     - [B3 — Prior de Gibbs: comportamiento MAP de los parámetros](#b3--prior-de-gibbs-comportamiento-map-de-los-parámetros)
+      - [Qué son MAP y Adam, y cómo actúan aquí](#qué-son-map-y-adam-y-cómo-actúan-aquí)
     - [B4 — Campo de velocidad](#b4--campo-de-velocidad)
   - [6. Experimento C — Verificación empírica de la condición PL](#6-experimento-c--verificación-empírica-de-la-condición-pl)
     - [C1 — Diagrama log-log: $|\\nabla J|^2$ vs $(J - J^\*)$](#c1--diagrama-log-log-nabla-j2-vs-j---j)
@@ -36,7 +37,7 @@
     - [C3 — Constante PL estimada $\\hat{\\mu}$ por $\\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
     - [C4 — Ratio PL a lo largo del entrenamiento](#c4--ratio-pl-a-lo-largo-del-entrenamiento)
   - [7. Experimento D — Genericidad del minimizador estable](#7-experimento-d--genericidad-del-minimizador-estable)
-    - [Diseño mejorado (Ideas A + B + D)](#diseño-mejorado-ideas-a--b--d)
+    - [Diseño experimental](#diseño-experimental)
     - [Figura](#figura)
     - [Interpretación](#interpretación-1)
   - [8. Conclusiones](#8-conclusiones)
@@ -296,6 +297,26 @@ $$\nu_t^*(da) \propto \exp\!\left(\underbrace{-\ell(a)}_{\text{prior}} \underbra
 
 El término de clasificación lleva un factor $1/\varepsilon$. Cuando $\varepsilon$ es **pequeño**, $1/\varepsilon$ es grande y ese término domina: en el MAP, los parámetros se colocan donde mejor clasifican, ignorando el prior, y los pesos resultan dispersos. Cuando $\varepsilon$ es **grande**, $1/\varepsilon$ se hace pequeño, el prior $-\ell(a)$ domina y el MAP encoge los parámetros hacia cero — comportamiento clásico de *weight decay*. Este es el mecanismo MAP análogo a la concentración de la distribución de Gibbs hacia $\nu^\infty$.
 
+#### Qué son MAP y Adam, y cómo actúan aquí
+
+**MAP (Maximum A Posteriori)** es un método para estimar parámetros que combina dos fuentes de información: los datos observados y una creencia previa (*prior*) sobre cómo deben ser los parámetros. Por la regla de Bayes:
+
+$$P(\theta \mid \text{datos}) \propto \underbrace{P(\text{datos}\mid\theta)}_{\text{verosimilitud}} \cdot \underbrace{P(\theta)}_{\text{prior}}$$
+
+MAP busca el $\theta$ que maximiza esta expresión. Tomando logaritmo, maximizar el log-posterior equivale a minimizar:
+
+$$-\log P(\text{datos}\mid\theta) - \log P(\theta) \;=\; \text{BCE} + \varepsilon \cdot \frac{1}{N_\theta}\sum_j \ell(\theta_j)$$
+
+que es exactamente $J$. El prior es $\nu^\infty(\theta) \propto e^{-\ell(\theta)}$, así que $-\log P(\theta) = \ell(\theta)$. Por tanto, **minimizar $J$ con Adam es hacer estimación MAP** bajo el prior de Gibbs $\nu^\infty$. El resultado es un único vector de parámetros $\theta^*$ — un punto fijo, no una distribución. Por eso el histograma de B3 muestra los $\sim 450$ valores deterministas de $\theta^*$, no muestras aleatorias.
+
+**Adam** (Adaptive Moment Estimation) es el algoritmo que ejecuta esa minimización iterativamente. En cada época calcula $\nabla J(\theta)$ mediante backpropagation y actualiza los parámetros. Respecto al descenso en gradiente estándar ($\theta \leftarrow \theta - \eta\,\nabla J$), Adam añade dos mejoras: utiliza una media móvil de los gradientes pasados (momento, que suaviza las actualizaciones) y adapta la tasa de aprendizaje de forma individual para cada parámetro según el historial de sus gradientes. El resultado es que todos los parámetros convergen a una velocidad similar, independientemente de su escala.
+
+La cadena completa del experimento es por tanto:
+
+$$\underbrace{\text{Prior } \nu^\infty}_{\varepsilon\cdot\ell(\theta) \text{ en } J} + \underbrace{\text{Dataset } \gamma_0}_{\text{BCE en } J} \xrightarrow{\text{Adam minimiza } J} \theta^*_{\text{MAP}}$$
+
+El prior entra en $J$ como penalización L4+L2, Adam minimiza $J$ época a época, y el resultado es $\theta^*_{\text{MAP}}$: los parámetros que mejor clasifican los datos sin alejarse demasiado del prior. Cada uno de esos $\sim 450$ valores es una barra del histograma.
+
 ### B4 — Campo de velocidad
 
 ![Campo de velocidad](../figuras/B4_velocity_field.png)
@@ -358,22 +379,22 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 **Objetivo:** Verificar empíricamente el Meta-Teorema 1: que la unicidad del minimizador estable es una propiedad "genérica" (válida para casi toda distribución inicial $\gamma_0$).
 
-### Diseño mejorado (Ideas A + B + D)
+### Diseño experimental
 
-El diseño anterior variaba el ruido del dataset para cambiar $\gamma_0$, pero esto mezclaba la variación de $\gamma_0$ con la dificultad intrínseca de la tarea. El diseño actual emplea tres mejoras:
+El experimento explora si distintas distribuciones iniciales $\gamma_0$ conducen cada una a un único minimizador estable, o si por el contrario distintas inicializaciones de parámetros pueden converger a soluciones geométricamente distintas para la misma $\gamma_0$.
 
-**Idea A — Variar $\gamma_0$ via semilla del dataset:**
-Se generan $n_{\rm datasets} = 8$ datasets `make_moons` con el **mismo nivel de ruido** ($\sigma = 0.12$) pero distintas semillas aleatorias. Cada semilla produce una distribución $\gamma_0$ diferente manteniendo la misma dificultad de clasificación. Para cada $\gamma_0$ se entrenan $n_{\rm inits} = 3$ modelos con semillas de parámetros independientes.
+**Variación de $\gamma_0$:**
+Se generan $n_{\rm datasets} = 8$ datasets `make_moons` con el **mismo nivel de ruido** ($\sigma = 0.12$) pero distintas semillas aleatorias. Cada semilla produce una realización diferente de la distribución empírica $\hat{\gamma}_0$, manteniendo constante la dificultad de la tarea de clasificación. Para cada $\hat{\gamma}_0$ se entrenan $n_{\rm inits} = 3$ modelos con semillas de inicialización de parámetros independientes.
 
-**Idea B — Criterio de convergencia adaptativo:**
-En lugar de fijar un número fijo de épocas (que puede dejar algunos modelos sin converger y a otros con tiempo malgastado), se detiene el entrenamiento cuando la norma cuadrada del gradiente satisface
+**Criterio de convergencia adaptativo:**
+El entrenamiento se detiene cuando la norma cuadrada del gradiente satisface
 
 $$\|\nabla J\|^2 < \delta = 5 \times 10^{-5} \quad \text{durante 5 épocas consecutivas}$$
 
-con un mínimo de 300 épocas y un máximo de 800. Esto garantiza que todos los modelos han convergido realmente, haciendo la comparación de $J^*$ entre inicializaciones más limpia.
+con un mínimo de 300 épocas y un máximo de 800. Este criterio asegura que todos los modelos han alcanzado un mínimo real y no un plateau transitorio, haciendo la comparación de $J^*$ entre inicializaciones más limpia.
 
-**Idea D — Métrica de distancia de frontera ($\Delta_{\rm boundary}$):**
-La variabilidad escalar $\text{Std}(J^*)$ puede ser pequeña aunque las fronteras de decisión sean geométricamente distintas (dos mínimos con el mismo valor de pérdida). Para capturar la variabilidad geométrica, se evalúan todos los modelos en una rejilla densa $80 \times 80$ sobre el espacio de features y se calcula:
+**Métrica de variabilidad geométrica ($\Delta_{\rm boundary}$):**
+La variabilidad escalar $\text{Std}(J^*)$ puede ser pequeña aunque las fronteras de decisión sean geométricamente distintas (dos mínimos con el mismo valor de pérdida pero distinta forma). Para capturar la variabilidad geométrica, se evalúan todos los modelos en una rejilla densa $80 \times 80$ sobre el espacio de features y se calcula:
 
 $$\Delta_{\rm boundary}(\gamma_0) = \frac{1}{\binom{n_{\rm inits}}{2}} \sum_{i < j} \frac{\|\sigma(m_i(\text{grid})) - \sigma(m_j(\text{grid}))\|_F}{\sqrt{n_{\rm grid}}}$$
 
