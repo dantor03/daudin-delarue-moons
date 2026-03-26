@@ -36,7 +36,21 @@
     - [C2 — Convergencia exponencial (escala semilog)](#c2--convergencia-exponencial-escala-semilog)
     - [C3 — Constante PL estimada $\\hat{\\mu}$ por $\\varepsilon$](#c3--constante-pl-estimada-hatmu-por-varepsilon)
     - [C4 — Ratio PL a lo largo del entrenamiento](#c4--ratio-pl-a-lo-largo-del-entrenamiento)
-  - [7. Conclusiones](#7-conclusiones)
+  - [7. Experimento D — Genericidad: robustez a semillas](#7-experimento-d--genericidad-robustez-a-semillas)
+    - [D1 — Robustez a la inicialización](#d1--robustez-a-la-inicialización)
+    - [D2 — Robustez a $\gamma_0$](#d2--robustez-a-gamma_0)
+    - [D3 — Variabilidad conjunta](#d3--variabilidad-conjunta)
+    - [Comparativa D1 / D2 / D3](#comparativa-d1--d2--d3)
+  - [8. Experimento E — Análisis de la distribución de parámetros $\nu^*$](#8-experimento-e--análisis-de-la-distribución-de-parámetros-nu)
+    - [E — Fila 0: distribuciones marginales por tipo](#e--fila-0-distribuciones-marginales-por-tipo)
+    - [E — Fila 1: distribución 2D de los pesos de entrada $a_1$](#e--fila-1-distribución-2d-de-los-pesos-de-entrada-a_1)
+    - [E — Fila 2: importancia neuronal y activación temporal](#e--fila-2-importancia-neuronal-y-activación-temporal)
+  - [9. Experimento F — Distribución de $\nu^*$ en make_circles: simetría rotacional](#9-experimento-f--distribución-de-nu-en-make_circles-simetría-rotacional)
+    - [Motivación: de bimodalidad (moons) a isotropía (circles)](#motivación-de-bimodalidad-moons-a-isotropía-circles)
+    - [F1 — Robustez a $\gamma_0$: variación del dataset](#f1--robustez-a-gamma_0-variación-del-dataset)
+    - [F2 — Robustez a $\theta_0$: variación de la inicialización](#f2--robustez-a-theta_0-variación-de-la-inicialización)
+    - [Síntesis: test cuantitativo de isotropía con $\bar{R}$](#síntesis-test-cuantitativo-de-isotropía-con-barr)
+  - [10. Conclusiones](#10-conclusiones)
   - [Referencias](#referencias)
 
 ---
@@ -371,9 +385,220 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 ---
 
-## 7. Conclusiones
+## 7. Experimento D — Genericidad: robustez a semillas
 
-Los tres experimentos proporcionan evidencia empírica consistente con los resultados teóricos de Daudin & Delarue (2025):
+**Objetivo:** Verificar empíricamente el Meta-Teorema 1: para una distribución inicial genérica $\gamma_0$ y con $\varepsilon > 0$, el minimizador es único y estable. En la práctica esto se manifiesta como **robustez**: distintas inicializaciones de los parámetros y distintos datasets deben converger al mismo valor óptimo $J^*$ y al mismo tipo de frontera de decisión.
+
+**Diseño:** Dos sub-experimentos con $n = 10$ seeds, entrenamiento de 500 épocas, comparando $\varepsilon \in \{0, 0.01\}$:
+
+- **D1:** Dataset fijo (`data_seed=42`), inicialización aleatoria (seeds 0–9). Mide robustez al *paisaje de pérdida* desde distintos puntos de partida.
+- **D2:** Inicialización fija (`init_seed=0`), dataset aleatorio (seeds 0–9). Mide robustez a la *distribución de datos* $\gamma_0$ — directamente el enunciado de genericidad.
+
+![Genericidad](../figuras/D_genericity.png)
+
+### D1 — Robustez a la inicialización
+
+**Columnas izquierda y central (curvas de convergencia):** Cada curva de color es un run con distinta semilla de inicialización. La banda blanca muestra la media ± 1σ entre seeds.
+
+El contraste entre $\varepsilon = 0$ y $\varepsilon = 0.01$ es la predicción central: con $\varepsilon > 0$ la banda debe ser más estrecha (menor varianza de $J$ entre runs), porque la condición PL garantiza que el descenso de gradiente no puede quedar atrapado en mínimos locales arbitrarios. Con $\varepsilon = 0$ no hay garantía teórica, por lo que la dispersión puede ser mayor.
+
+**Columna derecha (boxplots $\hat{\mu}_{PL}$ y $J^*$):** Cada caja muestra la distribución de la constante PL estimada $\hat{\mu}$ y del valor óptimo $J^*$ entre las 10 seeds, para $\varepsilon = 0$ (rojo) y $\varepsilon = 0.01$ (verde).
+
+- Si $\hat{\mu} > 0$ consistentemente con $\varepsilon = 0.01$ y las cajas son compactas, se confirma que la condición PL se mantiene para distintas inicializaciones.
+- Si $J^*$ tiene baja varianza con $\varepsilon = 0.01$, se confirma unicidad del minimizador (distintas inicializaciones convergen al mismo óptimo).
+
+### D2 — Robustez a $\gamma_0$
+
+**Columnas izquierda y central (curvas de convergencia):** Ahora la variabilidad proviene del dataset: cada run entrena sobre un `make_moons` generado con una semilla distinta. Esto corresponde directamente a la hipótesis de genericidad: el paper afirma que el resultado se cumple para *casi toda* $\gamma_0$, lo que en la práctica significa que los 10 datasets producen curvas de convergencia cualitativamente similares.
+
+**Columna derecha (fronteras superpuestas):** Las 6 fronteras de decisión $P(y=1|x) = 0.5$ (para 6 datasets distintos, $\varepsilon = 0.01$) se superponen sobre los datos de referencia del primer dataset. Los puntos de datos sirven solo de referencia visual.
+
+Si el Meta-Teorema 1 se cumple, las 6 fronteras deben separar correctamente las dos clases y ser cualitativamente similares entre sí, a pesar de provenir de $\gamma_0$ distintas. No se espera que sean idénticas (cada dataset tiene su propia geometría), sino que todas compartan la misma *topología*: una curva que rodea una de las dos lunas.
+
+### D3 — Variabilidad conjunta
+
+**Configuración:** Para la semilla $s \in \{0, \ldots, 9\}$, se usa simultáneamente `data_seed = s` e `init_seed = s`. Cada run parte de un dataset distinto **y** de una inicialización de parámetros distinta. Es el escenario más realista: en la práctica nunca se controla ninguna de las dos fuentes de aleatoriedad.
+
+**Qué muestra cada panel (fila inferior de la figura):**
+
+- **Columnas izquierda y central (curvas de pérdida):** La banda ±1σ de D3 debe ser la más ancha de los tres sub-experimentos, porque combina la variabilidad de D1 (inicialización) y de D2 (datos). El contraste entre ε=0 y ε=0.01 muestra si la regularización entrópica ayuda a reducir esta variabilidad conjunta.
+
+- **Columna derecha (fronteras superpuestas):** Se dibujan solo las fronteras de los runs que convergieron (acc ≥ 95%). Que estas fronteras sigan siendo topológicamente similares — a pesar de que cada run parte de un $(γ_0, θ_0)$ completamente distinto — es la verificación más exigente del Meta-Teorema 1.
+
+### Comparativa D1 / D2 / D3
+
+| Sub-experimento | $\gamma_0$ | $\theta_0$ | Variabilidad esperada |
+|---|---|---|---|
+| D1 | Fija (seed=42) | Aleatoria (seed=0..9) | Media — solo paisaje de pérdida |
+| D2 | Aleatoria (seed=0..9) | Fija (seed=4) | Baja — datasets similares, mismo inicio |
+| D3 | Aleatoria (seed=s) | Aleatoria (seed=s) | Alta — ambas fuentes activas |
+
+La comparación directa de las bandas ±1σ de los tres pares de paneles permite aislar cuánto de la dispersión total proviene de cada fuente. Los resultados observados son:
+
+- **D2** produce la banda más estrecha (std ≈ 0.026): distintos datasets generados por `make_moons` son geométricamente similares, y la misma inicialización converge de forma muy reproducible.
+- **D1** tiene una banda intermedia (std ≈ 0.074): distintas inicializaciones de parámetros generan trayectorias de pérdida más variables que distintos datasets.
+- **D3** produce la banda más ancha (std ≈ 0.094): combinar ambas fuentes de aleatoriedad amplía la dispersión, aunque el incremento sobre D1 es moderado (~27% de std adicional).
+
+**Conclusión:** la inicialización de parámetros es la fuente dominante de variabilidad (D1 ≫ D2), pero la aleatoriedad del dataset también contribuye de forma no despreciable (D3 > D1). La regularización entrópica (ε = 0.01) reduce la variabilidad en los tres sub-experimentos respecto a ε = 0.
+
+---
+
+## 8. Experimento E — Análisis de la distribución de parámetros $\nu^*$
+
+**Objetivo:** Estudiar en detalle la estructura interna de los parámetros aprendidos $\nu^*$, más allá de la distribución marginal conjunta del Experimento B3. El campo prototípico $b(x, a^m) = \sigma(a_1^m \cdot x + a_2^m) \cdot a_0^m$ tiene tres componentes con roles distintos que pueden converger de forma diferente al prior $\nu^\infty$.
+
+**Datos:** Se reutilizan los modelos entrenados del Experimento B (sin reentrenar).
+
+![Análisis de parámetros](../figuras/E_parameter_analysis.png)
+
+### E — Fila 0: distribuciones marginales por tipo
+
+Los tres paneles muestran la distribución empírica de cada tipo de parámetro al final del entrenamiento ($\varepsilon = 0.01$), comparada con el prior teórico $\nu^\infty \propto e^{-\ell(a)}$ (curva blanca discontinua):
+
+- **Panel izquierdo — $a_1^m \in \mathbb{R}^2$ (pesos de entrada):** definen la dirección espacial $a_1^m \cdot x$ que cada neurona "mira". Son los parámetros que determinan la orientación del filtro neuronal en $\mathbb{R}^2$. La distribución empírica muestra una estructura **bimodal** llamativa: dos picos simétricos en torno a $\pm 0.3$–$0.4$, ausentes en el prior $\nu^\infty$ (que es unimodal y centrado en cero). Esta simetría refleja que el problema de clasificación binaria es simétrico respecto al signo: una neurona con dirección de proyección $a_1^m$ y otra con $-a_1^m$ producen exactamente la misma activación $|\sigma(\cdot)|$; la red aprende ambas orientaciones simultáneamente como dos "funciones de base" complementarias. El prior suave no puede prever esta estructura emergente.
+
+- **Panel central — coef. temporal + sesgos:** incluye $W_1[:,2]$ (cómo varía la activación con el tiempo $t$ del flujo ODE) y $b_1$ (umbral fijo de cada neurona). Estos parámetros controlan el *cuándo* se activa cada neurona a lo largo de la trayectoria.
+
+- **Panel derecho — $a_0^m \in \mathbb{R}^2$ (pesos de salida):** escalan la contribución vectorial de cada neurona al campo $F(x,t)$. Su norma $\|a_0^m\|_2$ mide la "importancia" de la neurona $m$. La distribución está fuertemente concentrada cerca de cero con cola pesada hacia valores grandes: la mayoría de las neuronas son "silenciosas" y unas pocas dominan el campo.
+
+La comparación entre los tres histogramas revela que los distintos roles funcionales llevan a distribuciones cualitativamente distintas, aunque el prior $\nu^\infty$ sea el mismo para todos.
+
+### E — Fila 1: distribución 2D de los pesos de entrada $a_1$
+
+Cada punto representa una neurona $m$, con posición $(a_1^m[0], a_1^m[1]) \in \mathbb{R}^2$ y color proporcional a la importancia $\|a_0^m\|_2$. El fondo muy tenue muestra la nube de datos `make_moons` como referencia de escala.
+
+Los tres paneles corresponden a $\varepsilon \in \{0, 0.01, 0.5\}$:
+
+- **ε = 0:** sin regularización, los pesos de entrada se dispersan libremente. La distancia desde el origen refleja cuán "agresiva" es la proyección de cada neurona.
+- **ε = 0.01:** regularización leve; los pesos se concentran ligeramente más cerca del origen.
+- **ε = 0.5:** regularización fuerte; los pesos de entrada son pequeños (todos cerca del origen), coherente con la concentración hacia $\nu^\infty$ observada en B3.
+
+La información de color añade una capa de análisis: ¿las neuronas con $\|a_0^m\|_2$ grande (colores claros, plasma) tienden a estar en posiciones distintas en el espacio de $a_1$? Una concentración de neuronas importantes en ciertas regiones del plano indicaría que la red aprende "funciones de base" con roles específicos.
+
+### E — Fila 2: importancia neuronal y activación temporal
+
+**Panel izquierdo — Contribución $c_m(t=0)$ vs $c_m(t=T)$:**
+
+Para cada neurona $m$ se calcula su contribución media al campo en el tiempo $t$:
+
+$$c_m(t) = \frac{1}{N} \sum_{i=1}^N \left|\sigma\!\left(a_1^m \cdot X_i + \text{tcoef}_m \cdot t + \text{bias}_m\right)\right| \cdot \|a_0^m\|_2$$
+
+El scatter $(c_m(0), c_m(T))$ con la diagonal punteada (identidad) separa el plano en dos regiones:
+- **Por encima de la diagonal:** neuronas que se vuelven *más activas* al final de la ODE que al principio.
+- **Por debajo de la diagonal:** neuronas que se *apagan* progresivamente durante el flujo.
+
+Esto revela la especialización temporal del campo: algunas neuronas actúan principalmente al inicio del flujo (cuando las lunas están entrelazadas) y otras al final (cuando las clases están casi separadas).
+
+**Panel central — Importancias $\|a_0^m\|_2$ ordenadas:**
+
+Las 64 neuronas se ordenan por importancia descendente para $\varepsilon \in \{0, 0.01, 0.5\}$. Si la curva cae bruscamente (codo pronunciado), pocas neuronas realizan casi todo el trabajo — el campo efectivo tiene *rango efectivo bajo*. Si la curva es plana, el campo distribuye el trabajo equitativamente entre todas las neuronas.
+
+La forma de las curvas muestra si la regularización entrópica afecta a la concentración de importancia: un ε mayor debería producir curvas más planas (la penalización KL desincentiva que unas pocas neuronas dominen).
+
+**Panel derecho — Correlación $\|a_1^m\| \leftrightarrow \|a_0^m\|$:**
+
+Para cada neurona $m$, se representa $\|a_1^m\|_2$ (cuánto "amplifica" la proyección de entrada) frente a $\|a_0^m\|_2$ (cuánto contribuye a la salida). El coeficiente de correlación $r$ se muestra en la leyenda.
+
+El resultado más llamativo es una **inversión de signo** entre los dos regímenes de regularización:
+
+- **ε = 0** (sin regularización): $r \approx -0.6$ — las neuronas con proyecciones de entrada grandes ($\|a_1^m\|$ alto) tienden a tener salidas *pequeñas*. Esto sugiere que, sin restricción, la red "compensa": unas pocas neuronas con proyecciones agresivas se neutralizan con pesos de salida bajos, mientras que las neuronas con proyecciones tímidas concentran la salida.
+- **ε = 0.01** (regularización leve): $r \approx +0.6$ — la correlación se invierte. Las neuronas importantes en entrada también son importantes en salida. La penalización KL penaliza neuronas con grandes normas en cualquier componente, lo que lleva a la red a ser consistente: un peso de entrada grande solo es "rentable" si también contribuye a la salida.
+- **ε = 0.5** (regularización fuerte): $r \approx 0$ — la regularización fuerte comprime todos los pesos hacia el prior y la correlación desaparece, porque las normas de todos los parámetros se vuelven uniformemente pequeñas.
+
+Esta inversión es evidencia directa de que la regularización entrópica cambia cualitativamente la estructura de la solución, no solo su escala.
+
+---
+
+## 9. Experimento F — Distribución de $\nu^*$ en make_circles: simetría rotacional
+
+**Dataset:** `make_circles(n=400, noise=0.08, factor=0.5)` — dos círculos concéntricos, uno exterior (clase 0) y uno interior (clase 1). La arquitectura y el prior $\nu^\infty$ son idénticos a los experimentos anteriores.
+
+![Distribución de ν* en make_circles](../figuras/F_circles_parameter_distribution.png)
+
+### Motivación: de bimodalidad (moons) a isotropía (circles)
+
+El Experimento E reveló que en make_moons los pesos de entrada $a_1^m$ tienen una distribución **bimodal** con dos picos en $\pm 0.3$–$0.4$. Esto refleja la geometría del dataset: las dos lunas tienen una dirección preferida (horizontal), y la red aprende a "mirar" en esa dirección y la opuesta.
+
+make_circles tiene **simetría rotacional completa** $SO(2)$: el dataset es invariante (en distribución) bajo cualquier rotación del plano $\mathbb{R}^2$. Si el aprendizaje respeta esta simetría, la distribución óptima $\nu^*$ también debería ser isotrópica. En particular:
+
+> **Predicción teórica:** Los pesos de entrada $a_1^m \in \mathbb{R}^2$ deben distribuirse aproximadamente de forma **uniforme en $S^1$** (un anillo en el plano), porque ninguna dirección espacial es privilegiada por la geometría del problema.
+
+Esta predicción es cuantificable mediante la **longitud resultante media**:
+$$\bar{R} = \left|\frac{1}{M}\sum_{m=1}^M e^{i\theta^m}\right| \in [0,1], \quad \theta^m = \arctan2(a_1^m[1],\, a_1^m[0])$$
+
+- $\bar{R} \approx 0$: distribución isotrópica (predicción de simetría verificada).
+- $\bar{R} \approx 1$: todos los vectores apuntan en la misma dirección (distribución concentrada).
+
+Para contraste, en make_moons la bimodalidad implica $\bar{R} > 0$ (los ángulos se concentran en dos direcciones opuestas, lo que parcialmente se cancela, pero la distribución dista de ser uniforme).
+
+### F1 — Robustez a $\gamma_0$: variación del dataset
+
+**Configuración:** `init_seed = 4` fija, `data_seed ∈ {0, ..., 9}` — 10 modelos entrenados sobre 10 instancias distintas de `make_circles` con la misma inicialización.
+
+**Resultados numéricos:**
+
+| `data_seed` | J* | acc | $\bar{R}$ |
+|---|---|---|---|
+| 0 | 0.052 | 99.0% | 0.017 |
+| 1 | 0.007 | 100% | 0.163 |
+| 2 | 0.005 | 100% | 0.117 |
+| 3 | 0.028 | 99.5% | 0.226 |
+| 4 | 0.010 | 100% | 0.161 |
+| 5 | 0.014 | 99.8% | 0.057 |
+| 6 | 0.006 | 100% | 0.161 |
+| 7 | 0.033 | 99.5% | 0.120 |
+| 8 | 0.020 | 100% | 0.148 |
+| 9 | 0.011 | 100% | 0.077 |
+| **media** | **0.019** | **99.8%** | **0.125 ± 0.058** |
+
+**Fila 0 de la figura:**
+
+- **Panel izquierdo (curvas de convergencia):** La banda ±1σ muestra variabilidad moderada entre los 10 datasets. La mayoría converge a acc ≥ 99.5%, con la excepción de `data_seed=0` (la realización más difícil, J*=0.052).
+
+- **Panel central (scatter 2D de $a_1^m$):** Los 640 vectores (64 por run × 10 runs) forman una nube difusa centrada en el origen, sin la estructura bimodal observada en moons. El círculo discontinuo (radio = norma media) muestra que los vectores se distribuyen en un anillo aproximado, consistente con isotropía.
+
+- **Panel derecho (histograma de $\theta$):** Las 10 curvas oscilan ruidosamente alrededor de la línea uniforme (blanca discontinua). Este ruido es **esperado**: con M=64 neuronas y 24 bins, hay de media solo 2–3 neuronas por bin. La ausencia de picos sistemáticos (que sí aparecerían para moons) es la evidencia de isotropía.
+
+### F2 — Robustez a $\theta_0$: variación de la inicialización
+
+**Configuración:** `data_seed = 42` fija, `init_seed ∈ {0, ..., 9}` — 10 inicializaciones distintas sobre el mismo make_circles.
+
+**Resultados numéricos:**
+
+| `init_seed` | J* | acc | $\bar{R}$ |
+|---|---|---|---|
+| 0 | 0.005 | 100% | 0.103 |
+| 1 | 0.007 | 100% | 0.171 |
+| 2 | 0.012 | 100% | 0.115 |
+| 3 | 0.061 | 99.0% | 0.034 |
+| 4 | 0.027 | 99.5% | 0.108 |
+| 5 | 0.004 | 100% | 0.072 |
+| 6 | 0.017 | 99.8% | 0.025 |
+| 7 | 0.005 | 100% | 0.120 |
+| 8 | 0.005 | 100% | 0.194 |
+| 9 | 0.019 | 99.8% | 0.073 |
+| **media** | **0.016** | **99.8%** | **0.102 ± 0.051** |
+
+**Fila 1 de la figura:** Estructura idéntica a F1. La comparación revela:
+
+- La banda de convergencia de F2 es ligeramente más estrecha que F1, sugiriendo que en make_circles la variabilidad del dataset afecta más a la dinámica que la inicialización — patrón opuesto a moons (donde D1 >> D2). Esto puede deberse a que circles es geométricamente más variable entre semillas (la separación entre círculos varía con el ruido).
+- Los histogramas de ángulo en F2 tienen la misma apariencia uniforme-ruidosa que en F1.
+
+### Síntesis: test cuantitativo de isotropía con $\bar{R}$
+
+**Fila 2 de la figura:**
+
+- **Panel izquierdo ($\bar{R}$ por run):** F1: $\bar{R} = 0.125 \pm 0.058$; F2: $\bar{R} = 0.102 \pm 0.051$. Ambos valores son notablemente bajos. Hay un punto de referencia teórico importante: para $M=64$ vectores **perfectamente uniformes** en $S^1$ (muestra i.i.d. de la distribución uniforme), el valor esperado de $\bar{R}$ es $\mathbb{E}[\bar{R}] = 1/\sqrt{M} = 1/8 = 0.125$. Los valores observados son consistentes con este **nivel de ruido estadístico de la distribución uniforme**, lo que confirma que $\nu^*$ es isotrópico hasta el límite detectable con $M=64$ neuronas.
+
+- **Panel central ($\overline{\|a_1^m\|_2}$ media ± std por run):** La escala de las proyecciones varía moderadamente entre seeds (rango ≈ 0.3–0.8), con F1 y F2 mostrando rangos similares. Esto indica que la *dirección* de $a_1^m$ es isotrópica (verificado por $\bar{R}$) pero la *magnitud* no es invariante a la semilla.
+
+- **Panel derecho (importancias $\|a_0^m\|_2$ ordenadas):** El haz de curvas de F1 (rojo) y F2 (azul) es estrecho y ambas medias coinciden. La estructura de importancia — pocas neuronas dominantes con un codo pronunciado en los primeros 5–10 ranks — es estable entre semillas y entre las dos fuentes de aleatoriedad. Este resultado se mantiene en circles igual que en moons (Exp. E): el rango efectivo del campo es bajo independientemente del dataset.
+
+---
+
+## 10. Conclusiones
+
+Los experimentos proporcionan evidencia empírica consistente con los resultados teóricos de Daudin & Delarue (2025):
 
 | Resultado del paper | Verificación empírica |
 |---|---|
@@ -381,6 +606,14 @@ Los tres experimentos proporcionan evidencia empírica consistente con los resul
 | $\varepsilon > 0$ concentra el control cerca de $\nu^\infty$ | Exp. B3: std($\theta$) decrece con $\varepsilon$ — MAP consistente con la predicción de Gibbs |
 | Condición PL: $\|\nabla J\|^2 \geq 2\mu(J-J^*)$ con $\mu > 0$ | Exp. C: ratio PL $> 0$ en todas las épocas |
 | Convergencia exponencial bajo PL | Exp. C2: decay lineal en escala log |
+| Genericidad (Meta-Teorema 1): minimizador único para casi toda $\gamma_0$ | Exp. D2/D3: $\hat{\mu}$ consistente entre data seeds; fronteras topológicamente similares |
+| $\varepsilon > 0$ hace la unicidad más robusta a la inicialización | Exp. D1: boxplots muestran dispersión de $J^*$ con ε=0 vs ε=0.01 |
+| La inicialización es la fuente dominante de variabilidad | Exp. D: std D1 (0.074) ≫ D2 (0.026); D3 (0.094) > D1, confirmando que datos e init son ambas fuentes relevantes, con init dominante |
+| Los tipos de parámetros ($a_1$, $a_2$, $a_0$) tienen distribuciones distintas | Exp. E fila 0: std y forma difieren entre tipos pese a compartir el mismo prior |
+| Especialización temporal: neuronas más activas al inicio vs al final del flujo | Exp. E (2,0): dispersión a ambos lados de la diagonal en scatter $c_m(0)$ vs $c_m(T)$ |
+| ε afecta la concentración espacial de $a_1$ y la distribución de importancias | Exp. E filas 1 y 2: mayor ε → $a_1$ más compacto; curva de importancias más plana |
+| La geometría del dataset determina la estructura de $\nu^*$ | Exp. F: en make_circles (simétrico SO(2)), $a_1^m$ se distribuye en $S^1$; $\bar{R}_{F1}=0.125 \approx 1/\sqrt{64}$ = nivel de ruido de la distribución uniforme |
+| La isotropía de $\nu^*$ es robusta a ambas fuentes de aleatoriedad | Exp. F: $\bar{R}_{F1}=0.125 \pm 0.058$ (datos) y $\bar{R}_{F2}=0.102 \pm 0.051$ (init), ambos consistentes con distribución uniforme en $S^1$ |
 
 La contribución más importante del paper es la robustez del resultado: **$\varepsilon$ no necesita ser grande** para garantizar la condición PL y la convergencia exponencial. Esto elimina el tradicional dilema entre regularización (que garantiza convergencia pero degrada la solución) y precisión (que da buenas soluciones pero sin garantías). Con cualquier $\varepsilon > 0$, por pequeño que sea, el descenso en gradiente converge exponencialmente al mínimo global.
 

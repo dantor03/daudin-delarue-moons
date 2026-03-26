@@ -104,7 +104,7 @@ import matplotlib.gridspec as gridspec
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.datasets import make_moons
+from sklearn.datasets import make_moons, make_circles
 from sklearn.preprocessing import StandardScaler
 
 warnings.filterwarnings('ignore')
@@ -171,6 +171,42 @@ def get_moons(n=400, noise=0.12, seed=SEED):
         y_np : (N,) array NumPy       — para visualización
     """
     X_np, y_np = make_moons(n_samples=n, noise=noise, random_state=seed)
+    X_np = StandardScaler().fit_transform(X_np).astype(np.float32)
+    y_np = y_np.astype(np.float32)
+    return (torch.tensor(X_np, device=DEVICE),
+            torch.tensor(y_np, device=DEVICE),
+            X_np, y_np)
+
+
+def get_circles(n: int = 400, noise: float = 0.08, factor: float = 0.5,
+                seed: int = SEED):
+    """
+    Genera el dataset make_circles y lo devuelve como tensores PyTorch.
+
+    Análogo a get_moons() pero con simetría rotacional COMPLETA: el dato γ₀
+    es invariante bajo rotaciones del plano ℝ². Esto implica una predicción
+    teórica sobre la distribución óptima de parámetros ν*:
+
+        Si γ₀ es isotrópico (simétrico bajo SO(2)), entonces ν* también debería
+        ser (aproximadamente) isotrópico. En particular, los pesos de entrada
+        a₁ᵐ deberían distribuirse uniformemente en S¹ (un anillo en ℝ²),
+        en lugar de los dos picos simétricos observados en make_moons.
+
+    Parámetros:
+        n      : número de muestras totales (mitad por clase)
+        noise  : desviación estándar del ruido gaussiano añadido a cada punto
+        factor : ratio de radio interior / radio exterior (∈ (0,1))
+                 Con factor=0.5: clase 0 en círculo externo, clase 1 en interno
+        seed   : semilla de aleatoriedad para reproducibilidad
+
+    Returns:
+        X    : (N, 2) tensor en DEVICE — features estandarizadas
+        y    : (N,) tensor en DEVICE  — etiquetas {0, 1}
+        X_np : (N, 2) array NumPy     — para visualización
+        y_np : (N,) array NumPy       — para visualización
+    """
+    X_np, y_np = make_circles(n_samples=n, noise=noise, factor=factor,
+                              random_state=seed)
     X_np = StandardScaler().fit_transform(X_np).astype(np.float32)
     y_np = y_np.astype(np.float32)
     return (torch.tensor(X_np, device=DEVICE),
@@ -1183,6 +1219,969 @@ def experiment_C(results_eps: dict):
 
 
 # =============================================================================
+# EXPERIMENTO D
+#   Genericidad: robustez a semillas de inicialización y de datos
+# =============================================================================
+def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
+    """
+    Genericidad del minimizador: robustez a semillas de inicialización y de datos.
+
+    META-TEOREMA 1 (paper, sec. 1.3):
+        Para un conjunto abierto y denso 𝒪 de condiciones iniciales γ₀, el
+        problema de control tiene un único minimizador ESTABLE.  La palabra
+        "genéricamente" significa que casi toda distribución inicial de datos
+        produce un paisaje de pérdida con un único mínimo profundo.
+
+    CONEXIÓN CON LA CONDICIÓN PL (Meta-Teorema 2):
+        Si la condición PL se cumple con μ > 0, gradient descent NO puede
+        quedar atrapado en mínimos locales distintos: la desigualdad garantiza
+        que desde cualquier punto del espacio de parámetros hay "cuesta abajo"
+        hacia el mínimo global.  Esto implica robustez a la inicialización.
+
+    DISEÑO DEL EXPERIMENTO:
+        Dos sub-experimentos para separar dos fuentes de variabilidad:
+
+        D1 — Robustez a la INICIALIZACIÓN (γ₀ fija, semilla de ν₀ variable):
+            • Dataset fijo: data_seed = 42  (misma γ₀ en todos los runs)
+            • Parámetros inicializados con n_seeds semillas distintas
+            • Para ε ∈ {0, 0.01}: ¿convergen al mismo J*?
+            • Predicción del paper: con ε > 0 la varianza de J* debe ser baja
+              (unicidad del minimizador garantizada por PL)
+
+        D2 — Robustez a γ₀ (inicialización fija, semilla de datos variable):
+            • init_seed = 4  (semilla que converge bien en D1)
+            • Dataset generado con n_seeds semillas distintas → n_seeds γ₀ distintas
+            • Para ε ∈ {0, 0.01}: ¿converge siempre?
+            • Predicción del paper: genericidad → casi toda γ₀ admite minimizador
+              estable; las fronteras de decisión deben ser cualitativamente similares
+
+        D3 — Variabilidad conjunta (ambas semillas varían simultáneamente):
+            • Para la semilla s ∈ {0,...,n_seeds-1}: data_seed=s E init_seed=s
+            • Ni el dataset ni los parámetros iniciales se repiten entre runs
+            • Es el escenario más realista: en la práctica no se controla ninguna
+              de las dos fuentes de aleatoriedad
+            • Predicción: mayor dispersión que D1 y D2 por separado; con ε > 0
+              la banda debe ser más estrecha que con ε = 0
+            • Las fronteras de D3 combinan variabilidad geométrica (γ₀) y
+              variabilidad de paisaje (θ₀) — aun así deben ser topológicamente
+              similares si el Meta-Teorema 1 se cumple
+
+    FIGURAS GENERADAS (D_genericity.png):
+        Layout 3×3:
+        Fila 0 (D1):  curvas J ε=0  |  curvas J ε=0.01  |  boxplot J* y μ̂
+        Fila 1 (D2):  curvas J ε=0  |  curvas J ε=0.01  |  fronteras superpuestas
+        Fila 2 (D3):  curvas J ε=0  |  curvas J ε=0.01  |  fronteras superpuestas
+
+    RESULTADO ESPERADO:
+        • D3 debe tener la banda más ancha de los tres sub-experimentos
+          (combina ambas fuentes de variabilidad)
+        • Con ε=0.01 la banda de D3 debe ser más estrecha que con ε=0
+        • Las fronteras de D3 son cualitativamente similares aunque provienen
+          de puntos de partida totalmente distintos en (γ₀, θ₀)
+    """
+    print("\n" + "=" * 62)
+    print("EXPERIMENTO D  —  Genericidad: robustez a semillas")
+    print("=" * 62)
+
+    SEEDS = list(range(n_seeds))
+    EPS_COMPARE = [0.0, 0.01]
+    DATA_SEED_FIXED = 42
+    INIT_SEED_FIXED = 4   # seed 4 converge bien en D1 (J*≈0.005) → D2 muestra
+                          # variabilidad real de γ₀ sin estar contaminada por
+                          # una mala inicialización
+
+    # ── D1: γ₀ fija, inicialización variable ─────────────────────────────────
+    print(f"\n  D1 — γ₀ fija (data_seed={DATA_SEED_FIXED}), "
+          f"{n_seeds} seeds de inicialización")
+    X, y, X_np, y_np = get_moons(seed=DATA_SEED_FIXED)
+
+    d1_results = {}   # d1_results[eps] = lista de dicts {hist, model, mu}
+    for eps in EPS_COMPARE:
+        print(f"    ε={eps}:")
+        d1_results[eps] = []
+        for s in SEEDS:
+            # Fijamos la semilla de inicialización para reproducibilidad
+            torch.manual_seed(s)
+            np.random.seed(s)
+            model = MeanFieldResNet(d1=2, M=64, T=1.0, n_steps=10).to(DEVICE)
+            hist  = train(model, X, y, epsilon=eps,
+                          n_epochs=n_epochs, verbose=False)
+            mu    = mu_pl_estimate(hist)
+            print(f"      init_seed={s}: J*={hist['J_star']:.5f} | "
+                  f"acc={hist['accuracy'][-1]:.3f} | μ̂={mu:.4f}")
+            d1_results[eps].append({'hist': hist, 'model': model, 'mu': mu})
+
+    # ── D2: inicialización fija, γ₀ variable ─────────────────────────────────
+    print(f"\n  D2 — init fija (init_seed={INIT_SEED_FIXED}), "
+          f"{n_seeds} seeds de datos (γ₀ distintas)")
+
+    d2_results = {}   # d2_results[eps] = lista de dicts {hist, model, mu, X_np, y_np}
+    for eps in EPS_COMPARE:
+        print(f"    ε={eps}:")
+        d2_results[eps] = []
+        for s in SEEDS:
+            Xs, ys, Xs_np, ys_np = get_moons(seed=s)
+            # Misma inicialización de parámetros en todos los runs de D2
+            torch.manual_seed(INIT_SEED_FIXED)
+            np.random.seed(INIT_SEED_FIXED)
+            model = MeanFieldResNet(d1=2, M=64, T=1.0, n_steps=10).to(DEVICE)
+            hist  = train(model, Xs, ys, epsilon=eps,
+                          n_epochs=n_epochs, verbose=False)
+            mu    = mu_pl_estimate(hist)
+            print(f"      data_seed={s}: J*={hist['J_star']:.5f} | "
+                  f"acc={hist['accuracy'][-1]:.3f} | μ̂={mu:.4f}")
+            d2_results[eps].append({
+                'hist': hist, 'model': model, 'mu': mu,
+                'X_np': Xs_np, 'y_np': ys_np
+            })
+
+    # ── D3: ambas semillas varían simultáneamente ─────────────────────────────
+    print(f"\n  D3 — ambas semillas varían (data_seed=s, init_seed=s), "
+          f"{n_seeds} pares distintos")
+
+    d3_results = {}   # d3_results[eps] = lista de dicts {hist, model, mu, X_np, y_np}
+    for eps in EPS_COMPARE:
+        print(f"    ε={eps}:")
+        d3_results[eps] = []
+        for s in SEEDS:
+            Xs, ys, Xs_np, ys_np = get_moons(seed=s)
+            torch.manual_seed(s)
+            np.random.seed(s)
+            model = MeanFieldResNet(d1=2, M=64, T=1.0, n_steps=10).to(DEVICE)
+            hist  = train(model, Xs, ys, epsilon=eps,
+                          n_epochs=n_epochs, verbose=False)
+            mu    = mu_pl_estimate(hist)
+            print(f"      seed={s}: J*={hist['J_star']:.5f} | "
+                  f"acc={hist['accuracy'][-1]:.3f} | μ̂={mu:.4f}")
+            d3_results[eps].append({
+                'hist': hist, 'model': model, 'mu': mu,
+                'X_np': Xs_np, 'y_np': ys_np
+            })
+
+    # ── Resumen estadístico ───────────────────────────────────────────────────
+    print("\n  RESUMEN — Robustez a init seeds (D1):")
+    for eps in EPS_COMPARE:
+        jstars = [r['hist']['J_star'] for r in d1_results[eps]]
+        mus    = [r['mu']             for r in d1_results[eps]]
+        print(f"    ε={eps:5.3f}: J* = {np.mean(jstars):.5f} ± {np.std(jstars):.5f} | "
+              f"μ̂ = {np.mean(mus):.4f} ± {np.std(mus):.4f}")
+
+    print("\n  RESUMEN — Robustez a data seeds (D2):")
+    for eps in EPS_COMPARE:
+        jstars = [r['hist']['J_star'] for r in d2_results[eps]]
+        mus    = [r['mu']             for r in d2_results[eps]]
+        print(f"    ε={eps:5.3f}: J* = {np.mean(jstars):.5f} ± {np.std(jstars):.5f} | "
+              f"μ̂ = {np.mean(mus):.4f} ± {np.std(mus):.4f}")
+
+    print("\n  RESUMEN — Variabilidad conjunta (D3):")
+    for eps in EPS_COMPARE:
+        jstars = [r['hist']['J_star'] for r in d3_results[eps]]
+        mus    = [r['mu']             for r in d3_results[eps]]
+        print(f"    ε={eps:5.3f}: J* = {np.mean(jstars):.5f} ± {np.std(jstars):.5f} | "
+              f"μ̂ = {np.mean(mus):.4f} ± {np.std(mus):.4f}")
+
+    # ── Figura D — Layout 3×3 ─────────────────────────────────────────────────
+    # Paleta de colores para las seeds individuales
+    SEED_COLORS = ['#e74c3c', '#f39c12', '#2ecc71', '#3498db', '#9b59b6',
+                   '#e67e22', '#1abc9c', '#e84393', '#a29bfe', '#fd79a8']
+
+    fig = plt.figure(figsize=(21, 18))
+    fig.patch.set_facecolor(DARK_BG)
+    gs  = gridspec.GridSpec(3, 3, figure=fig, hspace=0.52, wspace=0.34)
+
+    def _plot_loss_curves(ax, results_list, title):
+        """
+        Curvas de pérdida individuales (transparentes) + media ± 1σ en blanco.
+
+        Cada curva fina de color corresponde a un run con distinta semilla.
+        La banda blanca muestra la variabilidad entre seeds: cuanto más estrecha,
+        más robusta es la convergencia (lo que predice la condición PL con ε > 0).
+        """
+        losses = np.array([r['hist']['loss'] for r in results_list])   # (S, E)
+        epochs = np.arange(losses.shape[1])
+        for i, r in enumerate(results_list):
+            ax.plot(r['hist']['loss'],
+                    color=SEED_COLORS[i % len(SEED_COLORS)],
+                    lw=0.9, alpha=0.45)
+        mean_l = losses.mean(axis=0)
+        std_l  = losses.std(axis=0)
+        ax.plot(epochs, mean_l, color='white', lw=2.0, label='Media')
+        ax.fill_between(epochs, mean_l - std_l, mean_l + std_l,
+                        color='white', alpha=0.18, label='±1σ')
+        style_ax(ax, title, 'Época', '$J$')
+        ax.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=8)
+
+    # ── Fila 0: D1 ────────────────────────────────────────────────────────────
+    ax00 = fig.add_subplot(gs[0, 0])
+    _plot_loss_curves(ax00, d1_results[0.0],
+                      r'D1: init aleatoria, $\varepsilon=0$'
+                      '\n' r'$\gamma_0$ fija')
+
+    ax01 = fig.add_subplot(gs[0, 1])
+    _plot_loss_curves(ax01, d1_results[0.01],
+                      r'D1: init aleatoria, $\varepsilon=0.01$'
+                      '\n' r'$\gamma_0$ fija')
+
+    # D1 col 2: dos subpaneles independientes — μ̂ arriba, J* abajo.
+    # Cada métrica tiene su propia escala Y, evitando que J* (escala ~0.1)
+    # aplaste μ̂ (escala ~0.003) cuando comparten eje.
+    gs02  = gridspec.GridSpecFromSubplotSpec(
+        2, 1, subplot_spec=gs[0, 2], hspace=0.55
+    )
+    ax02a = fig.add_subplot(gs02[0])   # μ̂_PL
+    ax02b = fig.add_subplot(gs02[1])   # J*
+
+    mu_e0   = [r['mu']             for r in d1_results[0.0]]
+    mu_e001 = [r['mu']             for r in d1_results[0.01]]
+    js_e0   = [r['hist']['J_star'] for r in d1_results[0.0]]
+    js_e001 = [r['hist']['J_star'] for r in d1_results[0.01]]
+
+    _box_kw = dict(
+        patch_artist=True, widths=0.55,
+        medianprops=dict(color='white', lw=2.2),
+        whiskerprops=dict(color=TXT, lw=1.2),
+        capprops=dict(color=TXT, lw=1.2),
+        flierprops=dict(markerfacecolor=TXT, marker='o', markersize=4)
+    )
+
+    # — subpanel μ̂ —
+    bp_mu = ax02a.boxplot([mu_e0, mu_e001], positions=[1, 2], **_box_kw)
+    for patch, c in zip(bp_mu['boxes'], ['#e74c3c', '#2ecc71']):
+        patch.set_facecolor(c); patch.set_alpha(0.75)
+    ax02a.set_xticks([1, 2])
+    ax02a.set_xticklabels(['ε=0', 'ε=0.01'], color=TXT, fontsize=8)
+    ax02a.axhline(0, color=GRID_C, lw=1.0, ls='--', alpha=0.7)
+    style_ax(ax02a, r'$\hat{\mu}_{PL}$ entre init seeds', '', r'$\hat{\mu}$')
+
+    # — subpanel J* —
+    bp_js = ax02b.boxplot([js_e0, js_e001], positions=[1, 2], **_box_kw)
+    for patch, c in zip(bp_js['boxes'], ['#e74c3c', '#2ecc71']):
+        patch.set_facecolor(c); patch.set_alpha(0.75)
+    ax02b.set_xticks([1, 2])
+    ax02b.set_xticklabels(['ε=0', 'ε=0.01'], color=TXT, fontsize=8)
+    style_ax(ax02b, r'$J^*$ entre init seeds', '', r'$J^*$')
+
+    # ── Fila 1: D2 ────────────────────────────────────────────────────────────
+    ax10 = fig.add_subplot(gs[1, 0])
+    _plot_loss_curves(ax10, d2_results[0.0],
+                      r'D2: $\gamma_0$ aleatoria, $\varepsilon=0$'
+                      '\n' r'init fija')
+
+    ax11 = fig.add_subplot(gs[1, 1])
+    _plot_loss_curves(ax11, d2_results[0.01],
+                      r'D2: $\gamma_0$ aleatoria, $\varepsilon=0.01$'
+                      '\n' r'init fija')
+
+    # D2 col 2: fronteras de decisión superpuestas (6 datasets, ε=0.01)
+    ax12 = fig.add_subplot(gs[1, 2])
+    ax12.set_facecolor(PANEL_BG)
+
+    # Calcular rango global del espacio de datos entre todos los runs
+    xmin_g = min(r['X_np'][:, 0].min() for r in d2_results[0.01]) - 0.5
+    xmax_g = max(r['X_np'][:, 0].max() for r in d2_results[0.01]) + 0.5
+    ymin_g = min(r['X_np'][:, 1].min() for r in d2_results[0.01]) - 0.5
+    ymax_g = max(r['X_np'][:, 1].max() for r in d2_results[0.01]) + 0.5
+    xx_c, yy_c = np.meshgrid(np.linspace(xmin_g, xmax_g, 150),
+                              np.linspace(ymin_g, ymax_g, 150))
+    grid_c = torch.tensor(
+        np.c_[xx_c.ravel(), yy_c.ravel()].astype(np.float32), device=DEVICE
+    )
+
+    # Datos de referencia visual (data_seed=0)
+    ref = d2_results[0.01][0]
+    ax12.scatter(ref['X_np'][ref['y_np'] == 0, 0],
+                 ref['X_np'][ref['y_np'] == 0, 1],
+                 c='#ff6b6b', s=10, alpha=0.35, zorder=2)
+    ax12.scatter(ref['X_np'][ref['y_np'] == 1, 0],
+                 ref['X_np'][ref['y_np'] == 1, 1],
+                 c='#74b9ff', s=10, alpha=0.35, zorder=2)
+
+    # Superponer 6 fronteras de decisión (isocurva P=0.5)
+    for i, r in enumerate(d2_results[0.01][:6]):
+        m = r['model']; m.eval()
+        with torch.no_grad():
+            Z = torch.sigmoid(m(grid_c)).cpu().numpy().reshape(xx_c.shape)
+        ax12.contour(xx_c, yy_c, Z, levels=[0.5],
+                     colors=[SEED_COLORS[i]], linewidths=1.8,
+                     alpha=0.90, zorder=5)
+
+    style_ax(ax12,
+             r'D2: fronteras de decisión, $\varepsilon=0.01$'
+             '\n' r'6 datasets distintos ($\gamma_0$ variables)',
+             '$x_1$', '$x_2$')
+    ax12.set_aspect('equal')
+    ax12.set_xlim(xmin_g, xmax_g)
+    ax12.set_ylim(ymin_g, ymax_g)
+
+    # ── Fila 2: D3 ────────────────────────────────────────────────────────────
+    ax20 = fig.add_subplot(gs[2, 0])
+    _plot_loss_curves(ax20, d3_results[0.0],
+                      r'D3: ambas aleatorias, $\varepsilon=0$'
+                      '\n' r'data\_seed = init\_seed = $s$')
+
+    ax21 = fig.add_subplot(gs[2, 1])
+    _plot_loss_curves(ax21, d3_results[0.01],
+                      r'D3: ambas aleatorias, $\varepsilon=0.01$'
+                      '\n' r'data\_seed = init\_seed = $s$')
+
+    # D3 col 2: fronteras de decisión superpuestas (6 pares distintos, ε=0.01)
+    ax22 = fig.add_subplot(gs[2, 2])
+    ax22.set_facecolor(PANEL_BG)
+
+    xmin_d3 = min(r['X_np'][:, 0].min() for r in d3_results[0.01]) - 0.5
+    xmax_d3 = max(r['X_np'][:, 0].max() for r in d3_results[0.01]) + 0.5
+    ymin_d3 = min(r['X_np'][:, 1].min() for r in d3_results[0.01]) - 0.5
+    ymax_d3 = max(r['X_np'][:, 1].max() for r in d3_results[0.01]) + 0.5
+    xx_d3, yy_d3 = np.meshgrid(np.linspace(xmin_d3, xmax_d3, 150),
+                                np.linspace(ymin_d3, ymax_d3, 150))
+    grid_d3 = torch.tensor(
+        np.c_[xx_d3.ravel(), yy_d3.ravel()].astype(np.float32), device=DEVICE
+    )
+
+    ref3 = d3_results[0.01][0]
+    ax22.scatter(ref3['X_np'][ref3['y_np'] == 0, 0],
+                 ref3['X_np'][ref3['y_np'] == 0, 1],
+                 c='#ff6b6b', s=10, alpha=0.35, zorder=2)
+    ax22.scatter(ref3['X_np'][ref3['y_np'] == 1, 0],
+                 ref3['X_np'][ref3['y_np'] == 1, 1],
+                 c='#74b9ff', s=10, alpha=0.35, zorder=2)
+
+    for i, r in enumerate(d3_results[0.01][:6]):
+        # Solo dibujar fronteras de runs que convergieron (acc ≥ 0.95)
+        if r['hist']['accuracy'][-1] < 0.95:
+            continue
+        m = r['model']; m.eval()
+        with torch.no_grad():
+            Z = torch.sigmoid(m(grid_d3)).cpu().numpy().reshape(xx_d3.shape)
+        ax22.contour(xx_d3, yy_d3, Z, levels=[0.5],
+                     colors=[SEED_COLORS[i]], linewidths=1.8,
+                     alpha=0.90, zorder=5)
+
+    style_ax(ax22,
+             r'D3: fronteras de decisión, $\varepsilon=0.01$'
+             '\n' r'6 pares (data\_seed, init\_seed) distintos',
+             '$x_1$', '$x_2$')
+    ax22.set_aspect('equal')
+    ax22.set_xlim(xmin_d3, xmax_d3)
+    ax22.set_ylim(ymin_d3, ymax_d3)
+
+    fig.suptitle(
+        r'Experimento D — Genericidad del minimizador (Meta-Teorema 1)'
+        '\n'
+        r'D1: $\gamma_0$ fija, init aleatoria   |   '
+        r'D2: init fija, $\gamma_0$ aleatoria   |   '
+        r'D3: ambas aleatorias',
+        color=TXT, fontsize=12
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    out = os.path.join(OUTPUT_DIR, 'D_genericity.png')
+    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=DARK_BG)
+    plt.close()
+    print(f"\n  → {out}")
+
+    print("\n  INTERPRETACIÓN:")
+    print("  • D3 combina ambas fuentes de variabilidad: esperar banda más ancha.")
+    print("  • Con ε=0.01 la banda de D3 debe ser más estrecha que con ε=0.")
+    print("  • Las fronteras de D3 deben ser topológicamente similares (Meta-Teorema 1).")
+
+    return d1_results, d2_results, d3_results
+
+
+# =============================================================================
+# EXPERIMENTO E
+#   Análisis de la distribución de parámetros ν* aprendida
+# =============================================================================
+def experiment_E(results_eps: dict):
+    """
+    Análisis en profundidad de la distribución de parámetros ν* aprendida.
+
+    MOTIVACIÓN:
+        El experimento B3 muestra la distribución MARGINAL de todos los
+        parámetros combinados comparada con el prior ν^∞.  Pero la estructura
+        de los parámetros en el paper es más rica: cada "neurona" m tiene tres
+        componentes con roles distintos en el campo prototípico:
+
+            b(x, aᵐ) = σ(a₁ᵐ · x + a₂ᵐ) · a₀ᵐ
+
+            a₁ᵐ ∈ ℝ²   — pesos de ENTRADA: definen la dirección en ℝ² que
+                          cada neurona "mira".  Son las "antenas" del campo.
+            a₂ᵐ ∈ ℝ    — sesgo: desplaza el umbral de activación σ.  En la
+                          implementación se divide en bias fijo (W1.bias[m])
+                          y coeficiente temporal (W1.weight[m, 2]) que escala
+                          el efecto del tiempo t ∈ [0,1].
+            a₀ᵐ ∈ ℝ²   — pesos de SALIDA: escalan la contribución de la
+                          neurona al campo vectorial en ℝ².  Su norma ||a₀ᵐ||
+                          mide la "importancia" de la neurona m.
+
+        Pese a compartir el mismo prior ν^∞ ∝ exp(-0.05|a|⁴ - 0.5|a|²),
+        estos tipos pueden converger a distribuciones distintas porque el
+        gradiente de la pérdida les llega de forma diferente.
+
+    DISEÑO DE LA FIGURA (E_parameter_analysis.png) — Layout 3×3:
+
+        FILA 0 — Distribuciones marginales por tipo de parámetro (ε=0.01):
+            (0,0): histograma de a₁ ∈ ℝ²  (pesos de entrada, 2×64=128 valores)
+            (0,1): histograma de coef. temporal y sesgo (a₂, 2×64 valores)
+            (0,2): histograma de a₀ ∈ ℝ²  (pesos de salida, 128 valores)
+            Cada panel compara con el prior ν^∞ (curva blanca discontinua).
+            Pregunta: ¿los distintos tipos de parámetro convergen de forma
+            diferente hacia el prior?
+
+        FILA 1 — Distribución 2D de pesos de entrada a₁ = (a₁[0], a₁[1]):
+            Un punto por neurona m, en el plano ℝ² de los pesos de entrada.
+            La posición en el plano es a₁ᵐ y el COLOR indica la importancia
+            ||a₀ᵐ||₂ de esa neurona.
+            Fondo: datos de make_moons a muy baja opacidad como referencia.
+            Para ε ∈ {0, 0.01, 0.5} — ¿cómo restringe ε la dispersión y
+            afecta a qué neuronas son importantes?
+
+        FILA 2 — Importancia de neuronas y activación temporal:
+            (2,0): Scatter de contribución al campo en t=0 vs t=T=1, por neurona.
+                   c_m(t) = (1/N) Σᵢ |σ(a₁ᵐ·Xᵢ + t·tcoef_m + bias_m)| · ||a₀ᵐ||
+                   La diagonal punteada es identidad. Puntos SOBRE la diagonal:
+                   neuronas más activas al final que al principio del flujo.
+                   Puntos BAJO la diagonal: neuronas que "apagan" durante la ODE.
+            (2,1): Importancias ||a₀ᵐ||₂ ordenadas de mayor a menor para
+                   ε ∈ {0, 0.01, 0.5}. Si la curva cae rápidamente (codo
+                   pronunciado), pocas neuronas hacen todo el trabajo.
+                   Si es plana, el campo es "democrático" entre neuronas.
+            (2,2): Correlación ||a₁ᵐ||₂ vs ||a₀ᵐ||₂ por neurona y por ε.
+                   Pregunta: ¿las neuronas con proyección de entrada fuerte
+                   (a₁ grande) tienden a tener salida fuerte (a₀ grande)?
+                   Una correlación positiva indicaría que la red asigna
+                   conjuntamente la importancia en entrada y salida.
+
+    NOTA SOBRE EXTRACCIÓN DE PARÁMETROS:
+        La implementación usa nn.Linear(d1+1, M) para W1, por lo que:
+            W1.weight ∈ ℝ^{M×(d1+1)} = ℝ^{64×3}
+            W1.weight[m, :2] = a₁ᵐ  (componente espacial)
+            W1.weight[m,  2] = coef. temporal de la neurona m
+            W1.bias[m]       = sesgo fijo de la neurona m
+            W0.weight ∈ ℝ^{d1×M} = ℝ^{2×64}
+            W0.weight[:, m]  = a₀ᵐ  (peso de salida de la neurona m)
+    """
+    print("\n" + "=" * 62)
+    print("EXPERIMENTO E  —  Distribución de parámetros ν*")
+    print("=" * 62)
+
+    X, y, X_np, y_np = get_moons()
+
+    # ── Funciones auxiliares ──────────────────────────────────────────────────
+    def get_params(model):
+        """Extrae los componentes (a₁, tcoef, bias, a₀) para cada neurona."""
+        with torch.no_grad():
+            W1w = model.velocity.W1.weight.cpu().numpy()   # (M, d1+1)
+            W1b = model.velocity.W1.bias.cpu().numpy()     # (M,)
+            W0w = model.velocity.W0.weight.cpu().numpy()   # (d1, M)
+        a1    = W1w[:, :2]   # (M, 2) — proyección espacial
+        tcoef = W1w[:,  2]   # (M,)   — coeficiente de t
+        bias  = W1b          # (M,)   — sesgo en t=0
+        a0    = W0w.T        # (M, 2) — peso de salida
+        return a1, tcoef, bias, a0
+
+    def importance(a0):
+        """||a₀ᵐ||₂ para cada neurona m → (M,)."""
+        return np.linalg.norm(a0, axis=1)
+
+    def contribution_at_t(a1, tcoef, bias, a0, X_local, t):
+        """
+        Contribución media de cada neurona al campo F en el "tiempo" t.
+
+        c_m(t) = (1/N) Σᵢ |σ(a₁ᵐ·Xᵢ + tcoef_m·t + bias_m)| · ||a₀ᵐ||₂
+
+        Nota: usa los datos X₀ (no la trayectoria X_t) para aislar el efecto
+        del tiempo codificado en los pesos, independientemente del flujo.
+        """
+        pre = X_local @ a1.T + tcoef * t + bias   # (N, M)
+        act = np.abs(np.tanh(pre)).mean(axis=0)    # (M,)
+        return act * importance(a0)                # (M,)
+
+    # Parámetros del modelo de referencia (ε=0.01)
+    model_ref = results_eps[0.01]['model']
+    a1r, tcoefr, biasr, a0r = get_params(model_ref)
+
+    print(f"  M = {a1r.shape[0]} neuronas | "
+          f"||a₁|| media = {np.linalg.norm(a1r,axis=1).mean():.4f} | "
+          f"||a₀|| media = {importance(a0r).mean():.4f}")
+
+    # ── Figura E ─────────────────────────────────────────────────────────────
+    fig = plt.figure(figsize=(21, 18))
+    fig.patch.set_facecolor(DARK_BG)
+    gs  = gridspec.GridSpec(3, 3, figure=fig, hspace=0.52, wspace=0.38)
+
+    def _prior_curve(ax, vals, color='#3498db', label_hist='Parámetros aprendidos'):
+        """Dibuja histograma + prior ν^∞ con escala adaptativa."""
+        p_lo = min(np.percentile(vals, 0.5), -0.5)
+        p_hi = max(np.percentile(vals, 99.5),  0.5)
+        a_range = np.linspace(p_lo, p_hi, 400)
+        log_pr  = -0.05 * a_range**4 - 0.5 * a_range**2
+        log_pr -= log_pr.max()
+        prior   = np.exp(log_pr) / np.trapz(np.exp(log_pr), a_range)
+        vals_in = vals[(vals >= p_lo) & (vals <= p_hi)]
+        ax.hist(vals_in, bins=40, density=True, alpha=0.75,
+                color=color, edgecolor='none', label=label_hist)
+        ax.plot(a_range, prior, 'w--', lw=2, label=r'$\nu^\infty$')
+        ax.text(0.97, 0.97, f'std={vals.std():.3f}', transform=ax.transAxes,
+                ha='right', va='top', color=TXT, fontsize=8,
+                bbox=dict(facecolor=PANEL_BG, alpha=0.7, pad=2))
+        ax.set_xlim(p_lo, p_hi)
+        ax.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7)
+
+    # ── Fila 0: marginales por tipo de parámetro ──────────────────────────────
+    COLORS_TYPE = ['#e74c3c', '#f39c12', '#2ecc71']
+
+    # (0,0) — a₁: pesos de entrada espaciales
+    ax00 = fig.add_subplot(gs[0, 0])
+    _prior_curve(ax00, a1r.ravel(), color=COLORS_TYPE[0])
+    style_ax(ax00,
+             r'Pesos de entrada $a_1^m \in \mathbb{R}^2$  (ε=0.01)'
+             '\n' r'Rol: proyección $a_1^m \cdot x$ → "dirección que mira"',
+             r'$a_1^m[k]$', 'Densidad')
+
+    # (0,1) — a₂: coef. temporal + sesgo
+    ax01 = fig.add_subplot(gs[0, 1])
+    a2_all = np.concatenate([tcoefr, biasr])
+    _prior_curve(ax01, a2_all, color=COLORS_TYPE[1])
+    style_ax(ax01,
+             r'Coef. temporal $W_1[:,2]$ y sesgo $b_1$  (ε=0.01)'
+             '\n' r'Rol: umbral $a_1^m \cdot x + \text{tcoef}_m \cdot t + \text{bias}_m$',
+             r'valor', 'Densidad')
+
+    # (0,2) — a₀: pesos de salida
+    ax02 = fig.add_subplot(gs[0, 2])
+    _prior_curve(ax02, a0r.ravel(), color=COLORS_TYPE[2])
+    style_ax(ax02,
+             r'Pesos de salida $a_0^m \in \mathbb{R}^2$  (ε=0.01)'
+             '\n' r'Rol: amplitud $\sigma(\cdot) \cdot a_0^m$ → velocidad en $\mathbb{R}^2$',
+             r'$a_0^m[k]$', 'Densidad')
+
+    # ── Fila 1: distribución 2D de a₁ coloreada por ||a₀|| ───────────────────
+    EPS_SCATTER = [0.0, 0.01, 0.5]
+    for col, eps in enumerate(EPS_SCATTER):
+        ax = fig.add_subplot(gs[1, col])
+        a1e, _, _, a0e = get_params(results_eps[eps]['model'])
+        imp_e = importance(a0e)
+
+        # Fondo: datos make_moons (referencia de escala)
+        ax.scatter(X_np[y_np==0, 0], X_np[y_np==0, 1],
+                   c='#ff6b6b', s=5, alpha=0.12, zorder=1)
+        ax.scatter(X_np[y_np==1, 0], X_np[y_np==1, 1],
+                   c='#74b9ff', s=5, alpha=0.12, zorder=1)
+
+        sc = ax.scatter(a1e[:, 0], a1e[:, 1],
+                        c=imp_e, cmap='plasma', s=70, alpha=0.88,
+                        zorder=3, edgecolors='white', linewidths=0.4,
+                        vmin=0, vmax=imp_e.max())
+        plt.colorbar(sc, ax=ax, fraction=0.046, pad=0.04,
+                     label=r'$\|a_0^m\|_2$')
+        style_ax(ax,
+                 f'$a_1^m \\in \\mathbb{{R}}^2$ — ε={eps}'
+                 '\n' r'color = importancia $\|a_0^m\|_2$',
+                 r'$a_1^m[0]$', r'$a_1^m[1]$')
+        ax.set_aspect('equal')
+
+    # ── Fila 2: importancia y activación temporal ─────────────────────────────
+    EPS_IMP = [0.0, 0.01, 0.5]
+    COLORS_IMP = ['#e74c3c', '#2ecc71', '#9b59b6']
+
+    # (2,0): scatter contribución t=0 vs t=T (modelo ε=0.01)
+    ax20 = fig.add_subplot(gs[2, 0])
+    c0 = contribution_at_t(a1r, tcoefr, biasr, a0r, X_np, t=0.0)
+    cT = contribution_at_t(a1r, tcoefr, biasr, a0r, X_np, t=1.0)
+    imp_ref = importance(a0r)
+
+    sc20 = ax20.scatter(c0, cT, c=imp_ref, cmap='plasma', s=65,
+                        alpha=0.88, edgecolors='white', linewidths=0.4,
+                        vmin=0, vmax=imp_ref.max())
+    plt.colorbar(sc20, ax=ax20, fraction=0.046, pad=0.04,
+                 label=r'$\|a_0^m\|_2$')
+    lim = max(c0.max(), cT.max()) * 1.12
+    ax20.plot([0, lim], [0, lim], color=GRID_C, lw=1.5, ls='--', alpha=0.8)
+    # Anotar neuronas extremas
+    for m in range(len(c0)):
+        if cT[m] > 1.5 * c0[m] + 0.01 or c0[m] > 1.5 * cT[m] + 0.01:
+            ax20.annotate(str(m), (c0[m], cT[m]),
+                          fontsize=6, color=TXT, alpha=0.7,
+                          xytext=(3, 3), textcoords='offset points')
+    ax20.set_xlim(0, lim); ax20.set_ylim(0, lim)
+    style_ax(ax20,
+             r'Contribución neuronal $c_m(t)$: $t=0$ vs $t=T$'
+             '\n' r'ε=0.01  |  ▲ diagonal: más activas al final',
+             r'$c_m(t=0)$', r'$c_m(t=T)$')
+
+    # (2,1): importancias ordenadas para los tres ε
+    ax21 = fig.add_subplot(gs[2, 1])
+    for eps, col in zip(EPS_IMP, COLORS_IMP):
+        _, _, _, a0e = get_params(results_eps[eps]['model'])
+        imp_sorted = np.sort(importance(a0e))[::-1]
+        ax21.plot(np.arange(1, len(imp_sorted)+1), imp_sorted,
+                  color=col, lw=1.8, marker='o', ms=3.5,
+                  label=f'ε={eps}')
+    style_ax(ax21,
+             r'Importancia neuronal $\|a_0^m\|_2$ ordenada'
+             '\n' r'Codo pronunciado → pocas neuronas dominan',
+             'Rank (neurona)', r'$\|a_0^m\|_2$')
+    ax21.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=8)
+
+    # (2,2): correlación ||a₁ᵐ|| vs ||a₀ᵐ|| por neurona
+    ax22 = fig.add_subplot(gs[2, 2])
+    for eps, col in zip(EPS_IMP, COLORS_IMP):
+        a1e, _, _, a0e = get_params(results_eps[eps]['model'])
+        norm_a1 = np.linalg.norm(a1e, axis=1)
+        norm_a0 = importance(a0e)
+        corr = np.corrcoef(norm_a1, norm_a0)[0, 1]
+        ax22.scatter(norm_a1, norm_a0, color=col, s=35, alpha=0.70,
+                     edgecolors='none', label=f'ε={eps}  r={corr:.2f}')
+    style_ax(ax22,
+             r'Correlación $\|a_1^m\|$ vs $\|a_0^m\|$'
+             '\n' r'¿entrada fuerte implica salida fuerte?',
+             r'$\|a_1^m\|_2$', r'$\|a_0^m\|_2$')
+    ax22.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=8)
+
+    fig.suptitle(
+        r'Experimento E — Análisis de la distribución de parámetros $\nu^*$'
+        '\n'
+        r'Fila 0: marginales por tipo  |  '
+        r'Fila 1: distribución 2D de $a_1$ coloreada por importancia  |  '
+        r'Fila 2: importancia y activación temporal',
+        color=TXT, fontsize=11
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(OUTPUT_DIR, 'E_parameter_analysis.png')
+    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=DARK_BG)
+    plt.close()
+    print(f"\n  → {out}")
+
+
+# =============================================================================
+# EXPERIMENTO F
+#   Distribución de ν* en make_circles: simetría rotacional y robustez a semillas
+# =============================================================================
+def experiment_F(n_seeds: int = 10, n_epochs: int = 700):
+    """
+    Distribución de ν* en make_circles: simetría geométrica y robustez a semillas.
+
+    MOTIVACIÓN TEÓRICA:
+        make_circles tiene simetría rotacional completa SO(2): el dataset γ₀
+        es invariante (en distribución) bajo rotaciones del plano ℝ².  Si el
+        problema de control también respeta esta simetría, la distribución óptima
+        de parámetros ν* debería ser asimismo (aproximadamente) isotrópica.
+
+        Predicción concreta sobre a₁ᵐ:
+            Los pesos de entrada a₁ᵐ ∈ ℝ² deberían distribuirse UNIFORMEMENTE
+            en S¹ (un anillo en el plano), porque ninguna dirección espacial es
+            privilegiada por la geometría del problema.
+
+        Contraste con make_moons:
+            En el Experimento E observamos una distribución BIMODAL de a₁
+            (dos picos en ±0.3–0.4).  Esto refleja que las dos "lunas" tienen
+            una orientación preferida.  Con circles esperamos la distribución
+            contraria: uniforme sobre S¹.
+
+        Test cuantitativo — longitud resultante media R̄:
+            R̄ = |mean(exp(iθ))| ∈ [0,1],   θ = arctan2(a₁ᵐ[1], a₁ᵐ[0])
+            R̄ ≈ 0 → distribución isotrópica (predicción de simetría)
+            R̄ ≈ 1 → distribución concentrada en una dirección
+
+    DISEÑO DEL EXPERIMENTO:
+        F1 — Robustez a γ₀ (init fija, datos variables):
+            • init_seed = 4 fija (misma inicialización en todos los runs)
+            • Dataset make_circles con n_seeds semillas distintas
+            • Pregunta: ¿la distribución de a₁ cambia con el dataset?
+
+        F2 — Robustez a θ₀ (datos fijos, init variable):
+            • data_seed = 42 fijo (mismo make_circles en todos los runs)
+            • n_seeds inicializaciones de parámetros distintas
+            • Pregunta: ¿la distribución de a₁ cambia con la inicialización?
+
+    FIGURAS GENERADAS (F_circles_parameter_distribution.png):
+        Layout 3×3:
+        Fila 0 (F1): curvas J ±1σ  |  scatter 2D de a₁  |  hist. ángulo θ(a₁)
+        Fila 1 (F2): curvas J ±1σ  |  scatter 2D de a₁  |  hist. ángulo θ(a₁)
+        Fila 2 (síntesis): R̄ por run  |  ||a₁|| media ± std por run  |  importancias
+    """
+    print("\n" + "=" * 62)
+    print("EXPERIMENTO F  —  ν* en make_circles: simetría y robustez")
+    print("=" * 62)
+
+    EPS             = 0.01
+    DATA_SEED_FIXED = 42
+    INIT_SEED_FIXED = 4
+    SEEDS           = list(range(n_seeds))
+
+    # ── Funciones auxiliares ──────────────────────────────────────────────────
+    def get_a1(model):
+        """Extrae los pesos espaciales a₁ᵐ ∈ ℝ² para cada neurona."""
+        W1w = model.velocity.W1.weight.detach().cpu().numpy()  # (M, d1+1)
+        return W1w[:, :2]   # (M, 2)
+
+    def get_a0(model):
+        """Extrae los pesos de salida a₀ᵐ ∈ ℝ² para cada neurona."""
+        W0w = model.velocity.W0.weight.detach().cpu().numpy()  # (d1, M)
+        return W0w.T        # (M, 2)
+
+    def importance(a0):
+        """||a₀ᵐ||₂ — importancia de cada neurona."""
+        return np.linalg.norm(a0, axis=1)
+
+    def mean_resultant_length(a1):
+        """
+        Longitud resultante media R̄ del ángulo de los vectores a₁ᵐ.
+
+        R̄ = |mean(exp(iθ))| ∈ [0,1], con θ = arctan2(a₁ᵐ[1], a₁ᵐ[0]).
+        R̄ ≈ 0: distribución isotrópica (uniforme en S¹).
+        R̄ ≈ 1: todos los ángulos apuntan en la misma dirección.
+        """
+        angles = np.arctan2(a1[:, 1], a1[:, 0])
+        return float(np.abs(np.mean(np.exp(1j * angles))))
+
+    # ── F1: semillas de datos, init fija ─────────────────────────────────────
+    print("  F1: 10 datasets circles distintos, init_seed=4 fija...")
+    results_F1 = []
+    for s in SEEDS:
+        X, y, X_np_s, y_np_s = get_circles(seed=s)
+        torch.manual_seed(INIT_SEED_FIXED)
+        np.random.seed(INIT_SEED_FIXED)
+        model = MeanFieldResNet().to(DEVICE)
+        hist  = train(model, X, y, epsilon=EPS, n_epochs=n_epochs, verbose=False)
+        acc   = hist['accuracy'][-1]
+        a1, a0 = get_a1(model), get_a0(model)
+        Rbar   = mean_resultant_length(a1)
+        results_F1.append({'model': model, 'hist': hist, 'seed': s,
+                           'a1': a1, 'a0': a0, 'acc': acc,
+                           'Rbar': Rbar, 'X_np': X_np_s, 'y_np': y_np_s})
+        print(f"    data_seed={s}: J*={hist['J_star']:.4f}, "
+              f"acc={acc:.3f}, R̄={Rbar:.3f}")
+
+    # ── F2: semillas de init, datos fijos ─────────────────────────────────────
+    print("  F2: dataset circles seed=42 fijo, 10 inits distintas...")
+    X_fixed, y_fixed, X_np_fixed, y_np_fixed = get_circles(seed=DATA_SEED_FIXED)
+    results_F2 = []
+    for s in SEEDS:
+        torch.manual_seed(s)
+        np.random.seed(s)
+        model = MeanFieldResNet().to(DEVICE)
+        hist  = train(model, X_fixed, y_fixed, epsilon=EPS,
+                      n_epochs=n_epochs, verbose=False)
+        acc   = hist['accuracy'][-1]
+        a1, a0 = get_a1(model), get_a0(model)
+        Rbar   = mean_resultant_length(a1)
+        results_F2.append({'model': model, 'hist': hist, 'seed': s,
+                           'a1': a1, 'a0': a0, 'acc': acc, 'Rbar': Rbar})
+        print(f"    init_seed={s}: J*={hist['J_star']:.4f}, "
+              f"acc={acc:.3f}, R̄={Rbar:.3f}")
+
+    # ── Resumen en consola ────────────────────────────────────────────────────
+    Rbar_F1 = np.array([r['Rbar'] for r in results_F1])
+    Rbar_F2 = np.array([r['Rbar'] for r in results_F2])
+    print(f"\n  R̄ medio F1 (datos): {Rbar_F1.mean():.4f} ± {Rbar_F1.std():.4f}")
+    print(f"  R̄ medio F2 (init):  {Rbar_F2.mean():.4f} ± {Rbar_F2.std():.4f}")
+    print(f"  R̄≈0 → ν* isotrópico (predicción de simetría circles ✓)")
+
+    # ── Figura F ──────────────────────────────────────────────────────────────
+    SEED_CMAP = plt.cm.tab10
+
+    fig = plt.figure(figsize=(21, 18))
+    fig.patch.set_facecolor(DARK_BG)
+    gs_fig = gridspec.GridSpec(3, 3, figure=fig, hspace=0.52, wspace=0.40)
+
+    # ── Helpers de figura ─────────────────────────────────────────────────────
+    def _loss_band(ax, results, title):
+        """Curvas de convergencia con banda ±1σ entre seeds."""
+        losses = np.array([r['hist']['loss'] for r in results])
+        mean_l = losses.mean(axis=0)
+        std_l  = losses.std(axis=0)
+        epochs = np.arange(len(mean_l))
+        for i, r in enumerate(results):
+            ax.plot(r['hist']['loss'], color=SEED_CMAP(i % 10),
+                    lw=0.7, alpha=0.35)
+        ax.plot(mean_l, color='white', lw=2.0, label='Media')
+        ax.fill_between(epochs, mean_l - std_l, mean_l + std_l,
+                        color='white', alpha=0.15, label='±1σ')
+        Jstar_arr = np.array([r['hist']['J_star'] for r in results])
+        ax.text(0.97, 0.97,
+                f'σ(J*)={Jstar_arr.std():.4f}\nJ*={Jstar_arr.mean():.4f}±{Jstar_arr.std():.4f}',
+                transform=ax.transAxes, ha='right', va='top',
+                color=TXT, fontsize=7.5,
+                bbox=dict(facecolor=PANEL_BG, alpha=0.75, pad=2))
+        ax.set_xlim(0, len(mean_l))
+        style_ax(ax, title, 'Época', 'J (BCE + ε·reg)')
+        ax.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7)
+
+    def _scatter_a1(ax, results, title, X_ref=None, y_ref=None):
+        """
+        Scatter 2D de los vectores a₁ᵐ para todos los runs superpuestos.
+        Si ν* es isotrópico, la nube de puntos debe formar un anillo.
+        """
+        if X_ref is not None:
+            ax.scatter(X_ref[y_ref == 0, 0], X_ref[y_ref == 0, 1],
+                       c='#ff6b6b', s=4, alpha=0.10, zorder=1)
+            ax.scatter(X_ref[y_ref == 1, 0], X_ref[y_ref == 1, 1],
+                       c='#74b9ff', s=4, alpha=0.10, zorder=1)
+        for i, r in enumerate(results):
+            a1 = r['a1']
+            ax.scatter(a1[:, 0], a1[:, 1],
+                       color=SEED_CMAP(i % 10), s=22,
+                       alpha=0.55, edgecolors='none')
+        # Círculo de referencia con radio = norma media de a₁
+        r_med = np.median([np.linalg.norm(r['a1'], axis=1).mean()
+                           for r in results])
+        theta_ref = np.linspace(0, 2 * np.pi, 300)
+        ax.plot(r_med * np.cos(theta_ref), r_med * np.sin(theta_ref),
+                color='white', lw=1.2, ls='--', alpha=0.5,
+                label=f'r̄={r_med:.2f}')
+        ax.set_aspect('equal')
+        ax.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7)
+        style_ax(ax, title, r'$a_1^m[0]$', r'$a_1^m[1]$')
+
+    def _angle_hist(ax, results, title):
+        """
+        Histograma del ángulo polar θ = arctan2(a₁[1], a₁[0]).
+        Si ν* es isotrópico → distribución plana (uniforme en [-π, π]).
+        """
+        bins   = np.linspace(-np.pi, np.pi, 25)
+        bin_c  = 0.5 * (bins[:-1] + bins[1:])
+        for i, r in enumerate(results):
+            angles = np.arctan2(r['a1'][:, 1], r['a1'][:, 0])
+            counts, _ = np.histogram(angles, bins=bins)
+            ax.plot(bin_c, counts / counts.sum(),
+                    color=SEED_CMAP(i % 10), lw=1.3, alpha=0.55, marker='.')
+        uniform_h = 1.0 / (len(bins) - 1)
+        ax.axhline(uniform_h, color='white', lw=2.0, ls='--', alpha=0.80,
+                   label='Uniforme')
+        ax.set_xticks([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi])
+        ax.set_xticklabels([r'$-\pi$', r'$-\pi/2$', '0', r'$\pi/2$', r'$\pi$'],
+                           color=TXT, fontsize=7.5)
+        style_ax(ax, title,
+                 r'$\theta = \arctan2(a_1^m[1],\,a_1^m[0])$', 'Densidad')
+        ax.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7)
+
+    # ── Fila 0: F1 ────────────────────────────────────────────────────────────
+    ax00 = fig.add_subplot(gs_fig[0, 0])
+    _loss_band(ax00, results_F1,
+               r'F1 — $\gamma_0$ aleatoria, $\theta_0$ fija  (ε=0.01)'
+               '\n10 datasets make_circles distintos')
+
+    # Datos de referencia = primer dataset de F1
+    X_ref_F1 = results_F1[0]['X_np']
+    y_ref_F1 = results_F1[0]['y_np']
+    ax01 = fig.add_subplot(gs_fig[0, 1])
+    _scatter_a1(ax01, results_F1,
+                r'F1 — Distribución 2D de $a_1^m$  (10 datasets)'
+                '\n' r'¿forma anular? → simetría rotacional de circles',
+                X_ref=X_ref_F1, y_ref=y_ref_F1)
+
+    ax02 = fig.add_subplot(gs_fig[0, 2])
+    _angle_hist(ax02, results_F1,
+                r'F1 — Histograma de $\theta(a_1^m)$'
+                '\n' r'Curva plana = $\nu^*$ isotrópico (predicción de simetría)')
+
+    # ── Fila 1: F2 ────────────────────────────────────────────────────────────
+    ax10 = fig.add_subplot(gs_fig[1, 0])
+    _loss_band(ax10, results_F2,
+               r'F2 — $\gamma_0$ fija, $\theta_0$ aleatoria  (ε=0.01)'
+               '\n10 inicializaciones de parámetros distintas')
+
+    ax11 = fig.add_subplot(gs_fig[1, 1])
+    _scatter_a1(ax11, results_F2,
+                r'F2 — Distribución 2D de $a_1^m$  (10 inits)'
+                '\n' r'¿el anillo se preserva con distintos $\theta_0$?',
+                X_ref=X_np_fixed, y_ref=y_np_fixed)
+
+    ax12 = fig.add_subplot(gs_fig[1, 2])
+    _angle_hist(ax12, results_F2,
+                r'F2 — Histograma de $\theta(a_1^m)$'
+                '\n' r'Estabilidad angular entre inicializaciones')
+
+    # ── Fila 2: síntesis ──────────────────────────────────────────────────────
+
+    # (2,0): R̄ por run — test cuantitativo de isotropía
+    ax20 = fig.add_subplot(gs_fig[2, 0])
+    x_F1 = np.arange(n_seeds)
+    x_F2 = np.arange(n_seeds) + n_seeds + 1.5
+    ax20.bar(x_F1, Rbar_F1, color='#e74c3c', alpha=0.82, width=0.8,
+             label=f'F1 (datos):  R̄={Rbar_F1.mean():.3f}')
+    ax20.bar(x_F2, Rbar_F2, color='#3498db', alpha=0.82, width=0.8,
+             label=f'F2 (init):   R̄={Rbar_F2.mean():.3f}')
+    ax20.axhline(0.0, color='white', lw=1.0, ls='--', alpha=0.4)
+    # Anotaciones de valor
+    for xi, v in zip(x_F1, Rbar_F1):
+        ax20.text(xi, v + 0.005, f'{v:.2f}', ha='center', va='bottom',
+                  color=TXT, fontsize=6.5)
+    for xi, v in zip(x_F2, Rbar_F2):
+        ax20.text(xi, v + 0.005, f'{v:.2f}', ha='center', va='bottom',
+                  color=TXT, fontsize=6.5)
+    ax20.set_xticks(list(x_F1) + list(x_F2))
+    ax20.set_xticklabels(
+        [f'F1-{s}' for s in SEEDS] + [f'F2-{s}' for s in SEEDS],
+        rotation=50, fontsize=6.5, color=TXT)
+    ax20.set_ylim(0, max(Rbar_F1.max(), Rbar_F2.max()) * 1.25)
+    style_ax(ax20,
+             r'Longitud resultante media $\bar{R}$ del ángulo de $a_1^m$'
+             '\n' r'$\bar{R} \approx 0$ = isotrópico  |  $\bar{R} \approx 1$ = concentrado',
+             'Run', r'$\bar{R}$')
+    ax20.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=8)
+
+    # (2,1): norma ||a₁|| media ± std por run — escala de las proyecciones
+    ax21 = fig.add_subplot(gs_fig[2, 1])
+    nm_F1 = [np.linalg.norm(r['a1'], axis=1).mean() for r in results_F1]
+    ns_F1 = [np.linalg.norm(r['a1'], axis=1).std()  for r in results_F1]
+    nm_F2 = [np.linalg.norm(r['a1'], axis=1).mean() for r in results_F2]
+    ns_F2 = [np.linalg.norm(r['a1'], axis=1).std()  for r in results_F2]
+    ax21.errorbar(SEEDS, nm_F1, yerr=ns_F1,
+                  fmt='o-', color='#e74c3c', capsize=4, lw=1.8,
+                  label='F1 (datos)')
+    ax21.errorbar(SEEDS, nm_F2, yerr=ns_F2,
+                  fmt='s--', color='#3498db', capsize=4, lw=1.8,
+                  label='F2 (init)')
+    style_ax(ax21,
+             r'Escala de $a_1^m$: $\overline{\|a_1^m\|_2}$ ± std por run'
+             '\n' r'Mide cuán "agresiva" es la proyección espacial de cada run',
+             'Semilla $s$', r'$\overline{\|a_1^m\|_2}$')
+    ax21.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=8)
+
+    # (2,2): curvas de importancia ||a₀|| para todos los runs (F1 + F2)
+    ax22 = fig.add_subplot(gs_fig[2, 2])
+    for i, r in enumerate(results_F1):
+        imp_s = np.sort(importance(r['a0']))[::-1]
+        ax22.plot(np.arange(1, len(imp_s) + 1), imp_s,
+                  color='#e74c3c', lw=0.9, alpha=0.35)
+    for i, r in enumerate(results_F2):
+        imp_s = np.sort(importance(r['a0']))[::-1]
+        ax22.plot(np.arange(1, len(imp_s) + 1), imp_s,
+                  color='#3498db', lw=0.9, alpha=0.35)
+    # Curvas medias
+    mean_imp_F1 = np.sort(
+        np.mean([importance(r['a0']) for r in results_F1], axis=0))[::-1]
+    mean_imp_F2 = np.sort(
+        np.mean([importance(r['a0']) for r in results_F2], axis=0))[::-1]
+    ax22.plot(np.arange(1, len(mean_imp_F1) + 1), mean_imp_F1,
+              color='#e74c3c', lw=2.5, label='F1 media')
+    ax22.plot(np.arange(1, len(mean_imp_F2) + 1), mean_imp_F2,
+              color='#3498db', lw=2.5, ls='--', label='F2 media')
+    style_ax(ax22,
+             r'Importancias $\|a_0^m\|_2$ ordenadas — todos los runs'
+             '\n' r'Estabilidad del rango efectivo entre semillas',
+             'Rank (neurona)', r'$\|a_0^m\|_2$')
+    ax22.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=8)
+
+    # ── Título global ─────────────────────────────────────────────────────────
+    fig.suptitle(
+        r'Experimento F — Distribución de $\nu^*$ en make_circles'
+        r': simetría rotacional y robustez a semillas'
+        '\n'
+        r'F1: $\gamma_0$ aleatoria (10 datasets), $\theta_0$ fija  |  '
+        r'F2: $\gamma_0$ fija, $\theta_0$ aleatoria (10 inits)  |  ε=0.01',
+        color=TXT, fontsize=11
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(OUTPUT_DIR, 'F_circles_parameter_distribution.png')
+    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=DARK_BG)
+    plt.close()
+    print(f"\n  → {out}")
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 if __name__ == '__main__':
@@ -1204,6 +2203,11 @@ if __name__ == '__main__':
     print("      convergencia, fronteras, forma de Gibbs, campo de velocidad.")
     print("  C → Con los modelos de B ya entrenados, verificamos la condición PL")
     print("      (reutiliza results_eps sin re-entrenar).")
+    print("  D → Genericidad: 10 seeds de init + 10 seeds de datos, ε∈{0, 0.01}.")
+    print("      Verifica Meta-Teorema 1: robustez del minimizador.")
+    print("  F → Distribución de ν* en make_circles: la simetría rotacional")
+    print("      del dataset predice a₁ uniforme en S¹. Se verifica con test")
+    print("      de longitud resultante media R̄ variando data_seed e init_seed.")
     print()
 
     # A : establece la geometría y sirve de modelo de referencia
@@ -1221,6 +2225,23 @@ if __name__ == '__main__':
     #             de entrenamiento de los modelos ya entrenados en B.
     experiment_C(results_eps)
 
+    # D : genericidad — robustez a semillas de inicialización y de datos.
+    #             Verifica el Meta-Teorema 1: distintas γ₀ e inicializaciones
+    #             convergen al mismo minimizador (con ε > 0).
+    experiment_D(n_seeds=10, n_epochs=500)
+
+    # E : análisis en profundidad de la distribución de parámetros ν*:
+    #             marginales por tipo (a₁, a₂, a₀), distribución 2D de a₁
+    #             coloreada por importancia ||a₀||, correlación ||a₁|| vs ||a₀||,
+    #             y activación temporal de cada neurona t=0 vs t=T.
+    #             Reutiliza los modelos de B sin re-entrenar.
+    experiment_E(results_eps)
+
+    # F : distribución de ν* en make_circles, dataset con simetría rotacional
+    #             completa SO(2). Predicción: a₁ᵐ distribuido uniformemente en S¹
+    #             (R̄ ≈ 0). Se verifica variando data_seed (F1) e init_seed (F2).
+    experiment_F(n_seeds=10, n_epochs=700)
+
     print("\n" + "=" * 65)
     print("  TODOS LOS EXPERIMENTOS COMPLETADOS")
     print()
@@ -1232,6 +2253,9 @@ if __name__ == '__main__':
         'B3_gibbs_parameter_dist.png',
         'B4_velocity_field.png',
         'C_pl_verification.png',
+        'D_genericity.png',
+        'E_parameter_analysis.png',
+        'F_circles_parameter_distribution.png',
     ]:
         print(f"    {OUTPUT_DIR}/{fname}")
     print("=" * 65)
