@@ -34,6 +34,7 @@
 \setbeamercolor{block body}{bg=IcmatDarkGrey!15}
 \setbeamercolor{block title alerted}{bg=IcmatDarkGrey,fg=IcmatOrange}
 \setbeamercolor{block body alerted}{bg=IcmatDarkGrey!10}
+\setbeamertemplate{navigation symbols}{}
 
 % Estilo de código Python
 \lstdefinestyle{python}{
@@ -46,6 +47,7 @@
   identifierstyle=\color{CodeId},
   numberstyle=\tiny\color{CodeCmt},
   breaklines=true,
+  showstringspaces=false,
   frame=none,
   xleftmargin=4pt,
   xrightmargin=4pt,
@@ -67,6 +69,18 @@ Beca de Introducción a la Investigación JAE\\
 \date{\today}
 
 \titlegraphic{\vspace{-0.75cm}\includegraphics[height=1.8cm]{logo_icmat.jpg}}
+
+% Diapositiva divisora automática al inicio de cada sección
+\AtBeginSection[]{
+  \begin{frame}
+    \vfill
+    \centering
+    \begin{beamercolorbox}[sep=14pt,center,rounded=true,shadow=true]{block title}
+      \usebeamerfont{title}\insertsectionhead\par
+    \end{beamercolorbox}
+    \vfill
+  \end{frame}
+}
 
 % -------------------------------------------------------------------
 \begin{document}
@@ -194,8 +208,9 @@ for s in SEEDS:
 \begin{frame}{Experimento D — Figura completa}
 
 \begin{center}
-  \includegraphics[width=0.95\linewidth]{../figuras/D_genericity.png}
+  \includegraphics[width=0.92\linewidth]{../figuras/D_genericity.png}
 \end{center}
+{\footnotesize\textit{Filas: D1 (init variable), D2 (datos variable), D3 (ambas). Columnas: pérdida $J$, accuracy, fronteras de decisión / boxplots.}}
 
 \end{frame}
 
@@ -279,7 +294,7 @@ Las 6 fronteras de decisión superpuestas (columna derecha) son cualitativamente
 
 % -------------------------------------------------------------------
 \begin{frame}{Experimento E — Motivación y diseño}
-
+\small
 El Experimento B3 mostraba la distribución marginal \emph{conjunta} de todos los parámetros. El Experimento E va más allá: estudia \textbf{cada componente de $a = (a_0, a_1, a_2)$ por separado}, comparando sus distribuciones con el prior $\nu^\infty$.
 
 \begin{columns}
@@ -318,8 +333,9 @@ El Experimento B3 mostraba la distribución marginal \emph{conjunta} de todos lo
 \begin{frame}{Experimento E — Figura completa}
 
 \begin{center}
-  \includegraphics[width=0.95\linewidth]{../figuras/E_parameter_analysis.png}
+  \includegraphics[width=0.92\linewidth]{../figuras/E_parameter_analysis.png}
 \end{center}
+{\footnotesize\textit{Fila 0: histogramas marginales de $a_1^m$, $a_2^m$, $a_0^m$. Fila 1: scatter 2D de $a_1^m$ coloreado por importancia $\|a_0^m\|_2$. Fila 2: scatter $c_m(0)$ vs $c_m(T)$, importancias ordenadas, correlación entrada--salida.}}
 
 \end{frame}
 
@@ -477,7 +493,7 @@ Mayor $\varepsilon$ produce curvas más planas: la penalización KL reparte más
 
 % -------------------------------------------------------------------
 \begin{frame}{Experimento F — De bimodalidad a isotropía}
-
+\small
 \begin{columns}
 \column{0.52\textwidth}
 
@@ -609,14 +625,15 @@ def get_circles(n=400, noise=0.08,
 \begin{frame}{Experimento F — Figura completa}
 
 \begin{center}
-  \includegraphics[width=0.95\linewidth]{../figuras/F_circles_parameter_distribution.png}
+  \includegraphics[width=0.92\linewidth]{../figuras/F_circles_parameter_distribution.png}
 \end{center}
+{\footnotesize\textit{Filas: F1 (datos variables), F2 (init variable). Columnas: pérdida, scatter 2D de $a_1^m$, histograma de ángulos $\theta$. Fila 2: $\bar{R}$ por run, escala de $\|a_1^m\|$, importancias ordenadas.}}
 
 \end{frame}
 
 % -------------------------------------------------------------------
 \begin{frame}{Experimento F — Convergencia y distribución de $a_1^m$}
-
+\small
 \begin{columns}
 \column{0.55\textwidth}
 
@@ -643,7 +660,7 @@ Los vectores $a_1^m$ de los 10 runs (coloreados por run) forman una \textbf{nube
 
 % -------------------------------------------------------------------
 \begin{frame}{Experimento F — Síntesis: test de isotropía con $\bar{R}$}
-
+\small
 \begin{columns}
 \column{0.55\textwidth}
 
@@ -660,23 +677,23 @@ Los vectores $a_1^m$ de los 10 runs (coloreados por run) forman una \textbf{nube
   \bottomrule
 \end{tabular}
 
-\medskip
-Ambos valores son \textbf{consistentes con el nivel de ruido estadístico} de la distribución uniforme en $S^1$. No se puede distinguir $\nu^*$ de la distribución uniforme con $M=64$ neuronas: la predicción de isotropía está verificada hasta el límite de detección.
+\smallskip
+Ambos valores son \textbf{consistentes con el nivel de ruido} de la distribución uniforme en $S^1$. No se puede distinguir $\nu^*$ de la uniforme con $M=64$: isotropía verificada hasta el límite de detección.
 
 \column{0.41\textwidth}
 \begin{alertblock}{Verificación de la predicción}
   $\bar{R}_{F1} = 0.125 \approx \mathbb{E}[\bar{R}]_{\text{uniforme}}$
 
-  \medskip
-  La simetría rotacional de make\_circles \textbf{se transmite a $\nu^*$}: los pesos de entrada $a_1^m$ aprenden a cubrir $S^1$ de forma uniforme, reflejando que ninguna dirección espacial es privilegiada.
+  \smallskip
+  La simetría de make\_circles \textbf{se transmite a $\nu^*$}: $a_1^m$ cubre $S^1$ uniformemente — ninguna dirección es privilegiada.
 
-  \medskip
-  Este resultado es robusto a ambas fuentes de aleatoriedad (F1 y F2).
+  \smallskip
+  Resultado robusto a F1 y F2.
 \end{alertblock}
 
-\medskip
+\smallskip
 \begin{block}{Importancias: estructura universal}
-  Las curvas $\|a_0^m\|_2$ ordenadas son estables entre seeds (F1 y F2). El codo rápido (pocas neuronas dominan) aparece en circles igual que en moons: es una propiedad de la \textbf{arquitectura}, no del dataset.
+  Codo rápido en $\|a_0^m\|_2$ tanto en circles como en moons: propiedad de la \textbf{arquitectura}, no del dataset.
 \end{block}
 \end{columns}
 
@@ -684,7 +701,7 @@ Ambos valores son \textbf{consistentes con el nivel de ruido estadístico} de la
 
 % -------------------------------------------------------------------
 \begin{frame}{Experimento F — Comparativa moons vs.\ circles}
-
+\small
 \begin{center}
 \begin{tabular}{p{0.30\linewidth}p{0.30\linewidth}p{0.30\linewidth}}
   \toprule
