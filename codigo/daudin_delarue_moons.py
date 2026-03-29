@@ -1284,7 +1284,7 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
     print("=" * 62)
 
     SEEDS = list(range(n_seeds))
-    EPS_COMPARE = [0.0, 0.01]
+    EPS_COMPARE = [0.0, 0.5]
     DATA_SEED_FIXED = 42
     INIT_SEED_FIXED = 4   # seed 4 converge bien en D1 (J*≈0.005) → D2 muestra
                           # variabilidad real de γ₀ sin estar contaminada por
@@ -1418,8 +1418,8 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                       '\n' r'$\gamma_0$ fija')
 
     ax01 = fig.add_subplot(gs[0, 1])
-    _plot_loss_curves(ax01, d1_results[0.01],
-                      r'D1: init aleatoria, $\varepsilon=0.01$'
+    _plot_loss_curves(ax01, d1_results[0.5],
+                      r'D1: init aleatoria, $\varepsilon=0.5$'
                       '\n' r'$\gamma_0$ fija')
 
     # D1 col 2: dos subpaneles independientes — μ̂ arriba, J* abajo.
@@ -1432,9 +1432,9 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
     ax02b = fig.add_subplot(gs02[1])   # J*
 
     mu_e0   = [r['mu']             for r in d1_results[0.0]]
-    mu_e001 = [r['mu']             for r in d1_results[0.01]]
+    mu_e05 = [r['mu']             for r in d1_results[0.5]]
     js_e0   = [r['hist']['J_star'] for r in d1_results[0.0]]
-    js_e001 = [r['hist']['J_star'] for r in d1_results[0.01]]
+    js_e05 = [r['hist']['J_star'] for r in d1_results[0.5]]
 
     _box_kw = dict(
         patch_artist=True, widths=0.55,
@@ -1445,20 +1445,20 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
     )
 
     # — subpanel μ̂ —
-    bp_mu = ax02a.boxplot([mu_e0, mu_e001], positions=[1, 2], **_box_kw)
+    bp_mu = ax02a.boxplot([mu_e0, mu_e05], positions=[1, 2], **_box_kw)
     for patch, c in zip(bp_mu['boxes'], ['#e74c3c', '#2ecc71']):
         patch.set_facecolor(c); patch.set_alpha(0.75)
     ax02a.set_xticks([1, 2])
-    ax02a.set_xticklabels(['ε=0', 'ε=0.01'], color=TXT, fontsize=8)
+    ax02a.set_xticklabels(['ε=0', 'ε=0.5'], color=TXT, fontsize=8)
     ax02a.axhline(0, color=GRID_C, lw=1.0, ls='--', alpha=0.7)
     style_ax(ax02a, r'$\hat{\mu}_{PL}$ entre init seeds', '', r'$\hat{\mu}$')
 
     # — subpanel J* —
-    bp_js = ax02b.boxplot([js_e0, js_e001], positions=[1, 2], **_box_kw)
+    bp_js = ax02b.boxplot([js_e0, js_e05], positions=[1, 2], **_box_kw)
     for patch, c in zip(bp_js['boxes'], ['#e74c3c', '#2ecc71']):
         patch.set_facecolor(c); patch.set_alpha(0.75)
     ax02b.set_xticks([1, 2])
-    ax02b.set_xticklabels(['ε=0', 'ε=0.01'], color=TXT, fontsize=8)
+    ax02b.set_xticklabels(['ε=0', 'ε=0.5'], color=TXT, fontsize=8)
     style_ax(ax02b, r'$J^*$ entre init seeds', '', r'$J^*$')
 
     # ── Fila 1: D2 ────────────────────────────────────────────────────────────
@@ -1468,8 +1468,8 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                       '\n' r'init fija')
 
     ax11 = fig.add_subplot(gs[1, 1])
-    _plot_loss_curves(ax11, d2_results[0.01],
-                      r'D2: $\gamma_0$ aleatoria, $\varepsilon=0.01$'
+    _plot_loss_curves(ax11, d2_results[0.5],
+                      r'D2: $\gamma_0$ aleatoria, $\varepsilon=0.5$'
                       '\n' r'init fija')
 
     # D2 col 2: fronteras de decisión superpuestas (6 datasets, ε=0.01)
@@ -1477,10 +1477,10 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
     ax12.set_facecolor(PANEL_BG)
 
     # Calcular rango global del espacio de datos entre todos los runs
-    xmin_g = min(r['X_np'][:, 0].min() for r in d2_results[0.01]) - 0.5
-    xmax_g = max(r['X_np'][:, 0].max() for r in d2_results[0.01]) + 0.5
-    ymin_g = min(r['X_np'][:, 1].min() for r in d2_results[0.01]) - 0.5
-    ymax_g = max(r['X_np'][:, 1].max() for r in d2_results[0.01]) + 0.5
+    xmin_g = min(r['X_np'][:, 0].min() for r in d2_results[0.5]) - 0.5
+    xmax_g = max(r['X_np'][:, 0].max() for r in d2_results[0.5]) + 0.5
+    ymin_g = min(r['X_np'][:, 1].min() for r in d2_results[0.5]) - 0.5
+    ymax_g = max(r['X_np'][:, 1].max() for r in d2_results[0.5]) + 0.5
     xx_c, yy_c = np.meshgrid(np.linspace(xmin_g, xmax_g, 150),
                               np.linspace(ymin_g, ymax_g, 150))
     grid_c = torch.tensor(
@@ -1488,7 +1488,7 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
     )
 
     # Datos de referencia visual (data_seed=0)
-    ref = d2_results[0.01][0]
+    ref = d2_results[0.5][0]
     ax12.scatter(ref['X_np'][ref['y_np'] == 0, 0],
                  ref['X_np'][ref['y_np'] == 0, 1],
                  c='#ff6b6b', s=10, alpha=0.35, zorder=2)
@@ -1497,7 +1497,7 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                  c='#74b9ff', s=10, alpha=0.35, zorder=2)
 
     # Superponer 6 fronteras de decisión (isocurva P=0.5)
-    for i, r in enumerate(d2_results[0.01][:6]):
+    for i, r in enumerate(d2_results[0.5][:6]):
         m = r['model']; m.eval()
         with torch.no_grad():
             Z = torch.sigmoid(m(grid_c)).cpu().numpy().reshape(xx_c.shape)
@@ -1506,7 +1506,7 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                      alpha=0.90, zorder=5)
 
     style_ax(ax12,
-             r'D2: fronteras de decisión, $\varepsilon=0.01$'
+             r'D2: fronteras de decisión, $\varepsilon=0.5$'
              '\n' r'6 datasets distintos ($\gamma_0$ variables)',
              '$x_1$', '$x_2$')
     ax12.set_aspect('equal')
@@ -1520,25 +1520,25 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                       '\n' r'data\_seed = init\_seed = $s$')
 
     ax21 = fig.add_subplot(gs[2, 1])
-    _plot_loss_curves(ax21, d3_results[0.01],
-                      r'D3: ambas aleatorias, $\varepsilon=0.01$'
+    _plot_loss_curves(ax21, d3_results[0.5],
+                      r'D3: ambas aleatorias, $\varepsilon=0.5$'
                       '\n' r'data\_seed = init\_seed = $s$')
 
     # D3 col 2: fronteras de decisión superpuestas (6 pares distintos, ε=0.01)
     ax22 = fig.add_subplot(gs[2, 2])
     ax22.set_facecolor(PANEL_BG)
 
-    xmin_d3 = min(r['X_np'][:, 0].min() for r in d3_results[0.01]) - 0.5
-    xmax_d3 = max(r['X_np'][:, 0].max() for r in d3_results[0.01]) + 0.5
-    ymin_d3 = min(r['X_np'][:, 1].min() for r in d3_results[0.01]) - 0.5
-    ymax_d3 = max(r['X_np'][:, 1].max() for r in d3_results[0.01]) + 0.5
+    xmin_d3 = min(r['X_np'][:, 0].min() for r in d3_results[0.5]) - 0.5
+    xmax_d3 = max(r['X_np'][:, 0].max() for r in d3_results[0.5]) + 0.5
+    ymin_d3 = min(r['X_np'][:, 1].min() for r in d3_results[0.5]) - 0.5
+    ymax_d3 = max(r['X_np'][:, 1].max() for r in d3_results[0.5]) + 0.5
     xx_d3, yy_d3 = np.meshgrid(np.linspace(xmin_d3, xmax_d3, 150),
                                 np.linspace(ymin_d3, ymax_d3, 150))
     grid_d3 = torch.tensor(
         np.c_[xx_d3.ravel(), yy_d3.ravel()].astype(np.float32), device=DEVICE
     )
 
-    ref3 = d3_results[0.01][0]
+    ref3 = d3_results[0.5][0]
     ax22.scatter(ref3['X_np'][ref3['y_np'] == 0, 0],
                  ref3['X_np'][ref3['y_np'] == 0, 1],
                  c='#ff6b6b', s=10, alpha=0.35, zorder=2)
@@ -1546,7 +1546,7 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                  ref3['X_np'][ref3['y_np'] == 1, 1],
                  c='#74b9ff', s=10, alpha=0.35, zorder=2)
 
-    for i, r in enumerate(d3_results[0.01][:6]):
+    for i, r in enumerate(d3_results[0.5][:6]):
         # Solo dibujar fronteras de runs que convergieron (acc ≥ 0.95)
         if r['hist']['accuracy'][-1] < 0.95:
             continue
@@ -1558,7 +1558,7 @@ def experiment_D(n_seeds: int = 10, n_epochs: int = 500):
                      alpha=0.90, zorder=5)
 
     style_ax(ax22,
-             r'D3: fronteras de decisión, $\varepsilon=0.01$'
+             r'D3: fronteras de decisión, $\varepsilon=0.5$'
              '\n' r'6 pares (data\_seed, init\_seed) distintos',
              '$x_1$', '$x_2$')
     ax22.set_aspect('equal')
@@ -1848,6 +1848,172 @@ def experiment_E(results_eps: dict):
     )
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     out = os.path.join(OUTPUT_DIR, 'E_parameter_analysis.png')
+    plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=DARK_BG)
+    plt.close()
+    print(f"\n  → {out}")
+
+
+# =============================================================================
+# EXPERIMENTO E2
+#   Robustez de ν* entre entrenamientos: ¿la distribución de parámetros
+#   es la misma con distintas semillas de inicialización y/o de datos?
+# =============================================================================
+def experiment_E2(n_seeds: int = 10, n_epochs: int = 500):
+    """
+    Robustez de ν* a distintas condiciones de entrenamiento (make_moons).
+
+    MOTIVACIÓN:
+        El Experimento E muestra la distribución ν* para UN único entrenamiento.
+        Pero ¿es esa distribución robusta?  Si el minimizador es único (Meta-
+        Teorema 1), distintas inicializaciones y distintos datasets deberían
+        producir distribuciones ν* similares — la misma "nube" de puntos en el
+        espacio de parámetros.
+
+    DISEÑO:
+        E2-1 — Robustez a θ₀ (datos fijos, init variable):
+            data_seed=42 fijo | init_seed ∈ {0, …, 9}
+            Pregunta: ¿varía ν* con la inicialización de pesos?
+
+        E2-2 — Robustez a γ₀ (init fija, datos variables):
+            init_seed=4 fijo | data_seed ∈ {0, …, 9}
+            Pregunta: ¿varía ν* con el dataset de entrenamiento?
+
+    FIGURA E2 (2×3):
+        Fila 0 (E2-1):  scatter 2D a₁ por seed  |  hist. a₁[k] por seed + prior ν∞  |  importancias ordenadas
+        Fila 1 (E2-2):  scatter 2D a₁ por seed  |  hist. a₁[k] por seed + prior ν∞  |  importancias ordenadas
+    """
+    print("\n" + "=" * 62)
+    print("EXPERIMENTO E2  —  Robustez de ν* entre entrenamientos")
+    print("=" * 62)
+
+    EPS             = 0.01
+    DATA_SEED_FIXED = 42
+    INIT_SEED_FIXED = 4
+    SEEDS           = list(range(n_seeds))
+
+    SEED_COLORS = ['#e74c3c', '#f39c12', '#2ecc71', '#3498db', '#9b59b6',
+                   '#e67e22', '#1abc9c', '#e84393', '#a29bfe', '#fd79a8']
+
+    def get_params(model):
+        with torch.no_grad():
+            W1w = model.velocity.W1.weight.cpu().numpy()   # (M, d1+1)
+            W1b = model.velocity.W1.bias.cpu().numpy()     # (M,)
+            W0w = model.velocity.W0.weight.cpu().numpy()   # (d1, M)
+        a1 = W1w[:, :2]   # (M, 2)
+        a0 = W0w.T        # (M, 2)
+        return a1, a0
+
+    def importance(a0):
+        return np.linalg.norm(a0, axis=1)   # (M,)
+
+    # ── E2-1: datos fijos, init variable ──────────────────────────────────────
+    print("  E2-1: data_seed=42 fijo, 10 inits distintas...")
+    X_fixed, y_fixed, _, _ = get_moons(seed=DATA_SEED_FIXED)
+    results_E2_1 = []
+    for s in SEEDS:
+        torch.manual_seed(s)
+        np.random.seed(s)
+        model = MeanFieldResNet().to(DEVICE)
+        hist  = train(model, X_fixed, y_fixed, epsilon=EPS,
+                      n_epochs=n_epochs, verbose=False)
+        a1, a0 = get_params(model)
+        results_E2_1.append({'seed': s, 'a1': a1, 'a0': a0, 'hist': hist})
+        print(f"    init_seed={s}: J*={hist['J_star']:.4f}, "
+              f"acc={hist['accuracy'][-1]:.3f}")
+
+    # ── E2-2: init fija, datos variables ──────────────────────────────────────
+    print("  E2-2: init_seed=4 fijo, 10 datasets distintos...")
+    results_E2_2 = []
+    for s in SEEDS:
+        X_s, y_s, _, _ = get_moons(seed=s)
+        torch.manual_seed(INIT_SEED_FIXED)
+        np.random.seed(INIT_SEED_FIXED)
+        model = MeanFieldResNet().to(DEVICE)
+        hist  = train(model, X_s, y_s, epsilon=EPS,
+                      n_epochs=n_epochs, verbose=False)
+        a1, a0 = get_params(model)
+        results_E2_2.append({'seed': s, 'a1': a1, 'a0': a0, 'hist': hist})
+        print(f"    data_seed={s}: J*={hist['J_star']:.4f}, "
+              f"acc={hist['accuracy'][-1]:.3f}")
+
+    # ── Figura E2 ─────────────────────────────────────────────────────────────
+    fig = plt.figure(figsize=(21, 12))
+    fig.patch.set_facecolor(DARK_BG)
+    gs  = gridspec.GridSpec(2, 3, figure=fig, hspace=0.50, wspace=0.38)
+
+    def _row(row_idx, results, subtitle):
+        """Dibuja la fila row_idx con los resultados de una variante E2."""
+
+        # (col 0) Scatter 2D de a₁, cada seed en un color distinto
+        ax0 = fig.add_subplot(gs[row_idx, 0])
+        for i, r in enumerate(results):
+            ax0.scatter(r['a1'][:, 0], r['a1'][:, 1],
+                        color=SEED_COLORS[i % len(SEED_COLORS)],
+                        s=20, alpha=0.65, edgecolors='none',
+                        label=f's={r["seed"]}')
+        style_ax(ax0,
+                 subtitle + '\n' r'Scatter $a_1^m \in \mathbb{R}^2$ por semilla',
+                 r'$a_1^m[0]$', r'$a_1^m[1]$')
+        ax0.set_aspect('equal')
+        ax0.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=6,
+                   loc='upper right', ncol=2, markerscale=1.4)
+
+        # (col 1) Histograma de los componentes a₁ᵐ[k] por seed + prior ν∞
+        ax1 = fig.add_subplot(gs[row_idx, 1])
+        all_vals = np.concatenate([r['a1'].ravel() for r in results])
+        p_lo = min(np.percentile(all_vals, 0.5), -0.5)
+        p_hi = max(np.percentile(all_vals, 99.5),  0.5)
+        bins = np.linspace(p_lo, p_hi, 35)
+        for i, r in enumerate(results):
+            vals = r['a1'].ravel()
+            ax1.hist(vals, bins=bins, density=True, alpha=0.35,
+                     color=SEED_COLORS[i % len(SEED_COLORS)], edgecolor='none')
+        # Prior ν∞
+        a_range = np.linspace(p_lo, p_hi, 400)
+        log_pr  = -0.05 * a_range**4 - 0.5 * a_range**2
+        log_pr -= log_pr.max()
+        prior   = np.exp(log_pr) / np.trapz(np.exp(log_pr), a_range)
+        ax1.plot(a_range, prior, 'w--', lw=2.2, label=r'$\nu^\infty$')
+        # Histograma agregado (contorno blanco)
+        ax1.hist(all_vals, bins=bins, density=True, histtype='step',
+                 color='white', lw=1.6, alpha=0.7, label='Todas las seeds')
+        ax1.set_xlim(p_lo, p_hi)
+        style_ax(ax1,
+                 subtitle + r'\nHist. $a_1^m[k]$ por semilla vs $\nu^\infty$',
+                 r'$a_1^m[k]$', 'Densidad')
+        ax1.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7)
+
+        # (col 2) Importancias ‖a₀ᵐ‖ ordenadas por seed
+        ax2 = fig.add_subplot(gs[row_idx, 2])
+        for i, r in enumerate(results):
+            imp = np.sort(importance(r['a0']))[::-1]
+            ax2.plot(np.arange(1, len(imp) + 1), imp,
+                     color=SEED_COLORS[i % len(SEED_COLORS)],
+                     lw=1.2, alpha=0.70)
+        # Media ± std de importancias
+        all_imp = np.array([np.sort(importance(r['a0']))[::-1] for r in results])
+        ax2.plot(np.arange(1, all_imp.shape[1] + 1), all_imp.mean(axis=0),
+                 color='white', lw=2.2, label='Media')
+        ax2.fill_between(np.arange(1, all_imp.shape[1] + 1),
+                         all_imp.mean(axis=0) - all_imp.std(axis=0),
+                         all_imp.mean(axis=0) + all_imp.std(axis=0),
+                         color='white', alpha=0.15)
+        style_ax(ax2,
+                 subtitle + '\n' r'Importancia $\|a_0^m\|_2$ ordenada por semilla',
+                 'Rank (neurona)', r'$\|a_0^m\|_2$')
+        ax2.legend(facecolor=PANEL_BG, labelcolor=TXT, fontsize=7)
+
+    _row(0, results_E2_1, 'E2-1 — init variable, datos fijos (seed=42)')
+    _row(1, results_E2_2, 'E2-2 — datos variables, init fija (seed=4)')
+
+    fig.suptitle(
+        r'Experimento E2 — Robustez de $\nu^*$ entre entrenamientos (make\_moons, $\varepsilon=0.01$)'
+        '\n'
+        r'Fila 0: 10 inits distintas (datos fijos)  |  Fila 1: 10 datasets distintos (init fija)',
+        color=TXT, fontsize=11
+    )
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    out = os.path.join(OUTPUT_DIR, 'E2_parameter_robustness.png')
     plt.savefig(out, dpi=150, bbox_inches='tight', facecolor=DARK_BG)
     plt.close()
     print(f"\n  → {out}")
@@ -2237,6 +2403,12 @@ if __name__ == '__main__':
     #             Reutiliza los modelos de B sin re-entrenar.
     experiment_E(results_eps)
 
+    # E2: robustez de ν* entre entrenamientos — ¿la distribución de parámetros
+    #             es la misma con distintas semillas de init y de datos?
+    #             E2-1: datos fijos, 10 inits distintas.
+    #             E2-2: init fija, 10 datasets distintos.
+    experiment_E2(n_seeds=10, n_epochs=500)
+
     # F : distribución de ν* en make_circles, dataset con simetría rotacional
     #             completa SO(2). Predicción: a₁ᵐ distribuido uniformemente en S¹
     #             (R̄ ≈ 0). Se verifica variando data_seed (F1) e init_seed (F2).
@@ -2255,6 +2427,7 @@ if __name__ == '__main__':
         'C_pl_verification.png',
         'D_genericity.png',
         'E_parameter_analysis.png',
+        'E2_parameter_robustness.png',
         'F_circles_parameter_distribution.png',
     ]:
         print(f"    {OUTPUT_DIR}/{fname}")

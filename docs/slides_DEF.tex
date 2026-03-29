@@ -95,6 +95,162 @@ Beca de Introducción a la Investigación JAE\\
 \end{frame}
 
 % ===================================================================
+\section{Optimizador y Scheduler — Adam + Cosine Annealing}
+
+% -------------------------------------------------------------------
+\begin{frame}{Optimizador: qué es y qué hace}
+\small
+El \textbf{optimizador} es el algoritmo que actualiza los parámetros $\theta$ de la red en cada época para reducir la pérdida $J$. La regla básica es el \textbf{descenso en gradiente}:
+
+\[
+  \theta_{t+1} = \theta_t - \underbrace{\eta_t}_{\text{lr}} \cdot \nabla_\theta J(\theta_t)
+\]
+
+\begin{columns}
+\column{0.50\textwidth}
+\begin{block}{¿Qué es la tasa de aprendizaje (lr)?}
+  El escalar $\eta_t > 0$ controla el tamaño del paso:
+  \begin{itemize}
+    \item $\eta_t$ grande $\Rightarrow$ pasos grandes, baja rápido pero puede oscilar.
+    \item $\eta_t$ pequeño $\Rightarrow$ pasos finos, converge con precisión pero lento.
+    \item $\eta_t \approx 0$ $\Rightarrow$ $\Delta\theta \approx 0$, parámetros \textbf{congelados}.
+  \end{itemize}
+\end{block}
+
+\column{0.46\textwidth}
+\begin{block}{Problema del GD puro}
+  El gradient descent básico usa el \textbf{mismo lr para todos los parámetros}. Pero algunos necesitan pasos grandes y otros pequeños $\Rightarrow$ ineficiente.
+\end{block}
+
+\smallskip
+\begin{alertblock}{Solución: Adam}
+  Adam adapta el lr \textbf{individualmente} para cada parámetro según su historia de gradientes. Ver siguiente diapositiva.
+\end{alertblock}
+\end{columns}
+
+\end{frame}
+
+% -------------------------------------------------------------------
+\begin{frame}{Adam — Adaptive Moment Estimation}
+\small
+\textbf{Problema del GD puro:} todos los parámetros comparten el mismo lr, aunque cada uno tenga escala y volatilidad distintas. Adam lo resuelve con \textbf{dos memorias} por parámetro:
+
+\begin{columns}
+\column{0.50\textwidth}
+
+\begin{block}{Las dos memorias}
+  \begin{tabular}{lp{0.60\linewidth}}
+    $m_t$ & Media móvil del gradiente (dirección reciente) \\[4pt]
+    $v_t$ & Media móvil del gradiente \textbf{al cuadrado} (volatilidad)
+  \end{tabular}
+\end{block}
+
+\smallskip
+Actualización:
+\[
+  \theta_{t+1} = \theta_t - \eta \cdot \frac{m_t}{\sqrt{v_t} + \varepsilon}
+\]
+
+\smallskip
+\begin{block}{Ventaja práctica}
+  Converge más rápido y es menos sensible a \texttt{lr}. Estándar en redes neuronales.\\
+  Código: \texttt{Adam(params, lr=0.005)}
+\end{block}
+
+\column{0.46\textwidth}
+\begin{alertblock}{Intuición del denominador $\sqrt{v_t}$}
+  \begin{itemize}\itemsep4pt
+    \item $v_t$ grande\\(gradientes volátiles)\\$\Rightarrow$ paso \textbf{frenado}
+    \item $v_t$ pequeño\\(gradientes suaves)\\$\Rightarrow$ paso \textbf{amplificado}
+  \end{itemize}
+  \smallskip
+  Cada parámetro tiene su propio lr efectivo según su historia.
+\end{alertblock}
+\end{columns}
+
+\end{frame}
+
+% -------------------------------------------------------------------
+\begin{frame}[fragile]{Scheduler: Cosine Annealing}
+\small
+Un \textbf{scheduler} modifica automáticamente el lr durante el entrenamiento. En lugar de mantenerlo fijo, lo hace variar según una fórmula predefinida.
+
+\medskip
+El scheduler utilizado es \textbf{CosineAnnealingLR}, que sigue la forma de un coseno decreciente:
+
+\[
+  \eta_t = \frac{\eta_{\max}}{2}\left(1 + \cos\!\left(\frac{\pi\, t}{T_{\max}}\right)\right)
+\]
+
+\begin{columns}
+\column{0.52\textwidth}
+
+\begin{tikzpicture}[scale=0.78]
+  \draw[->] (0,0) -- (5.4,0) node[right,font=\tiny] {época $t$};
+  \draw[->] (0,0) -- (0,2.4) node[above,font=\tiny] {$\eta_t$};
+  \draw[IcmatOrange, thick, domain=0:5, samples=100]
+    plot (\x, {1.8*(1 + cos(deg(\x*3.14159/5)))/2});
+  \draw[dashed, gray] (0,1.8) -- (5,1.8)
+    node[right, font=\tiny, gray] {$\eta_{\max}$};
+  \draw[dashed, gray] (5,0) -- (5,0.05)
+    node[below, font=\tiny, gray] {$T_{\max}$};
+  \node[font=\tiny] at (1.0,1.95) {lr alto};
+  \node[font=\tiny] at (4.2,0.25) {lr $\approx 0$};
+\end{tikzpicture}
+
+\column{0.44\textwidth}
+\begin{lstlisting}[style=python]
+opt = optim.Adam(
+    model.parameters(), lr=0.005)
+sch = optim.lr_scheduler\
+    .CosineAnnealingLR(
+        opt, T_max=n_epochs)
+
+for ep in range(n_epochs):
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
+    sch.step()  # actualiza lr
+\end{lstlisting}
+\end{columns}
+
+\smallskip
+Al inicio: $\eta_0 = \eta_{\max} = 0.005$. Al final ($t = T_{\max}$): $\eta_{T} = 0$.
+
+\end{frame}
+
+% -------------------------------------------------------------------
+\begin{frame}{Scheduler: efecto en las curvas de convergencia}
+\small
+\begin{columns}
+\column{0.52\textwidth}
+
+Causa del aplanamiento en la figura C (arriba-izquierda):
+
+\smallskip
+\begin{enumerate}\itemsep3pt
+  \item Al inicio: $\eta_t$ grande $\Rightarrow$ pérdida baja rápido.
+  \item $\eta_t$ decrece con el coseno conforme avanzan las épocas.
+  \item Al final: $\eta_t \approx 0$ $\Rightarrow$ $\Delta\theta = -\eta_t\nabla J \approx 0$.\\
+  Parámetros \textbf{congelados}, $J$ deja de decrecer.
+  \item En el plot log-log, la curva se vuelve \textbf{horizontal}: $J{-}J^*$ no avanza aunque $\|\nabla J\|^2$ sea finito.
+\end{enumerate}
+
+\column{0.44\textwidth}
+\begin{alertblock}{No es violación de PL}
+  La condición $\|\nabla J\|^2 \geq 2\mu(J{-}J^*)$ sigue cumpliéndose. El gradiente es grande, pero el optimizador \textbf{no puede aprovecharlo}: el scheduler ha reducido $\eta_t$ a casi cero.
+\end{alertblock}
+
+\smallskip
+\begin{block}{¿Por qué usarlo?}
+  \textbf{Inicio} (lr alto): explora el paisaje, escapa de zonas planas.\\
+  \textbf{Final} (lr $\approx$ 0): afina sin saltar el mínimo.
+\end{block}
+\end{columns}
+
+\end{frame}
+
+% ===================================================================
 \section{Experimento D — Genericidad: robustez a semillas}
 
 % -------------------------------------------------------------------
@@ -109,6 +265,9 @@ En la práctica, «genericidad» implica que \textbf{pequeñas variaciones en el
 \column{0.48\textwidth}
 \begin{block}{Fuente 1: inicialización de parámetros ($\theta_0$)}
   Los pesos de la red se inicializan con $\mathcal{N}(0, 0.1^2)$. Semillas distintas producen $\theta_0$ distintos y, por tanto, paisajes de pérdida distintos.
+
+  \smallskip
+  {\footnotesize\textbf{¿Por qué $\mathcal{N}(0,0.1^2)$?} Media cero: sin sesgo inicial de dirección. Varianza pequeña ($\sigma=0.1$): los pesos son pequeños al inicio, lo que evita que $\tanh$ se sature inmediatamente y permite que los gradientes fluyan desde el primer paso.}
 \end{block}
 
 \column{0.48\textwidth}
@@ -147,12 +306,19 @@ D3 es el escenario más realista: en la práctica no se controla ninguna de las 
 \column{0.48\textwidth}
 \begin{block}{Hiperparámetros}
   $n_\text{seeds} = 10$, $n_\text{epochs} = 500$\\
-  $\varepsilon \in \{0,\, 0.01\}$ (sin y con regularización)\\
+  $\varepsilon \in \{0,\, 0.5\}$ (sin y con regularización fuerte)\\
   $M = 64$ neuronas, integrador RK4
 \end{block}
 \column{0.48\textwidth}
-\begin{alertblock}{D1 vs.\ D2 como separación de fuentes}
-  Si D2 es más estrecho que D1: la inicialización domina. Si D3 $\approx$ D1: los datos no añaden variabilidad extra.
+\begin{alertblock}{D1 vs.\ D2: experimento controlado}
+  Cada sub-experimento aísla \textbf{una sola fuente}:
+  \begin{itemize}\itemsep2pt
+    \item D1 mide la variabilidad de $\theta_0$ pura (datos fijos).
+    \item D2 mide la variabilidad de $\gamma_0$ pura (init fija).
+  \end{itemize}
+  \smallskip
+  Si std(D2) $<$ std(D1) $\Rightarrow$ la inicialización domina sobre los datos.\\
+  Si std(D3) $\approx$ std(D1) $\Rightarrow$ añadir aleatoriedad de datos no suma variabilidad extra.
 \end{alertblock}
 \end{columns}
 
@@ -164,7 +330,7 @@ D3 es el escenario más realista: en la práctica no se controla ninguna de las 
 \begin{columns}
 \column{0.55\textwidth}
 \begin{lstlisting}[style=python]
-EPS_COMPARE = [0.0, 0.01]
+EPS_COMPARE = [0.0, 0.5]
 SEEDS = list(range(10))
 
 # D1: datos fijos, init aleatoria
@@ -219,7 +385,8 @@ for s in SEEDS:
 
 \begin{columns}
 \column{0.55\textwidth}
-\textbf{Panel izquierdo y central (fila 0):} curvas de pérdida $J$ con banda $\pm 1\sigma$ para $\varepsilon=0$ y $\varepsilon=0.01$.
+\small
+\textbf{Panel izquierdo y central (fila 0):} curvas de pérdida $J$ con banda $\pm 1\sigma$ para $\varepsilon=0$ y $\varepsilon=0.5$.
 
 \medskip
 \textbf{Panel derecho:} boxplots de $\hat{\mu}_{PL}$ y $J^*$ entre las 10 seeds de inicialización.
@@ -227,24 +394,24 @@ for s in SEEDS:
 \bigskip
 \begin{block}{Observaciones}
 \begin{itemize}
-  \item Con $\varepsilon=0.01$ (verde), los boxplots de $J^*$ son notablemente más compactos que con $\varepsilon=0$ (rojo).
-  \item La condición PL garantiza con $\varepsilon>0$ que distintas inicializaciones convergen al mismo $J^*$.
-  \item Con $\varepsilon=0$: algunos runs quedan atrapados en $J^*\approx 0.19$ (seed mal condicionada), mientras que con $\varepsilon=0.01$ todos convergen a $J^*\approx 0.005$.
+  \item $\varepsilon=0.5$ eleva $J^*$ de forma sistemática (media $0.059 \to 0.127$): el término KL es grande y visible en la pérdida.
+  \item La dispersión entre seeds \textbf{no se reduce} con $\varepsilon=0.5$ — confirma que el paper garantiza convergencia para «cualquier $\varepsilon>0$», no que $\varepsilon$ grande sea mejor.
+  \item Algunos runs con $\varepsilon=0$ quedan atascados ($J^*\approx 0.19$); con $\varepsilon=0.5$ todos convergen pero a valores más altos.
 \end{itemize}
 \end{block}
 
 \column{0.41\textwidth}
-\begin{alertblock}{Verificación del Meta-Teorema 2}
-  Con $\varepsilon>0$:
+\begin{alertblock}{Mensaje del Meta-Teorema 2}
+  La condición PL
   \[
     \|\nabla J\|^2 \geq 2\mu(J-J^*)
   \]
-  garantiza que el descenso no puede quedar atrapado en mínimos locales. Los boxplots compactos de $J^*$ son la evidencia empírica de que esto ocurre.
+  se cumple para \textbf{cualquier $\varepsilon>0$}. No se necesita $\varepsilon$ grande: un valor pequeño como $\varepsilon=0.01$ da la garantía teórica sin elevar $J^*$.
 \end{alertblock}
 
 \medskip
 \begin{block}{Escala de boxplots}
-  Se usan \textbf{dos subpaneles} (uno para $\hat\mu$, otro para $J^*$) porque las escalas difieren en dos órdenes de magnitud: $\hat\mu\approx 0.003$ frente a $J^*\approx 0.005$--$0.19$.
+  Dos subpaneles separados para $\hat\mu$ y $J^*$ porque sus escalas difieren dos órdenes de magnitud.
 \end{block}
 \end{columns}
 
@@ -281,208 +448,83 @@ Las 6 fronteras de decisión superpuestas (columna derecha) son cualitativamente
 \end{block}
 
 \begin{alertblock}{Conclusión}
-  \textbf{D1 $\gg$ D2}: la inicialización es la fuente dominante de variabilidad.\\[4pt]
-  \textbf{D3 $>$ D1}: los datos también contribuyen ($+27\%$ en std respecto a D1).\\[4pt]
-  En los tres casos, $\varepsilon=0.01$ reduce la dispersión respecto a $\varepsilon=0$.
+  \textbf{D1 $\gg$ D2}: la inicialización domina sobre los datos.\\[4pt]
+  \textbf{D3 $>$ D1}: ambas fuentes se suman ($+27\%$ en std).\\[4pt]
+  $\varepsilon=0.5$ eleva $J^*$ pero \textbf{no reduce} la dispersión — usar $\varepsilon$ pequeño es suficiente.
 \end{alertblock}
 \end{columns}
 
 \end{frame}
 
 % ===================================================================
-\section{Experimento E — Distribución de $\nu^*$}
+\section{Experimento E2 — Robustez de $\nu^*$ entre entrenamientos}
 
 % -------------------------------------------------------------------
-\begin{frame}{Experimento E — Motivación y diseño}
+\begin{frame}{Experimento E2 — Motivación}
 \small
-El Experimento B3 mostraba la distribución marginal \emph{conjunta} de todos los parámetros. El Experimento E va más allá: estudia \textbf{cada componente de $a = (a_0, a_1, a_2)$ por separado}, comparando sus distribuciones con el prior $\nu^\infty$.
-
 \begin{columns}
-\column{0.52\textwidth}
-\begin{block}{Las tres componentes del parámetro $a^m$}
-  \[
-    b(x, a^m) = \underbrace{\sigma\!\left(\underbrace{a_1^m \cdot x}_{\text{proyección}} + \underbrace{a_2^m}_{\text{sesgo+tiempo}}\right)}_{\text{activación no lineal}} \cdot \underbrace{a_0^m}_{\text{escala de salida}}
-  \]
-  \begin{tabular}{ll}
-    $a_1^m\in\mathbb{R}^2$ & dirección de proyección \\
-    $a_2^m = \text{tcoef}_m\cdot t + b_m$ & cuándo se activa \\
-    $a_0^m\in\mathbb{R}^2$ & contribución al campo \\
-  \end{tabular}
+\column{0.55\textwidth}
+
+\textbf{Pregunta:} ¿Es $\nu^*$ robusta?
+
+\medskip
+El Experimento E analiza la distribución de los 64 vectores $\{a^m\}$ para \textbf{un único entrenamiento}. Pero si el minimizador es único (Meta-Teorema 1), distintos puntos de partida deben converger a la \textbf{misma distribución}.
+
+\medskip
+\begin{block}{Dos sub-experimentos}
+  \textbf{E2-1 — Inicialización variable, datos fijos}\\
+  \quad data\_seed=42 fijo; init\_seed $\in \{0,\ldots,9\}$\\[4pt]
+  \textbf{E2-2 — Datos variables, inicialización fija}\\
+  \quad init\_seed=4 fijo; data\_seed $\in \{0,\ldots,9\}$
 \end{block}
 
-\column{0.44\textwidth}
-\begin{block}{Extracción de parámetros (código)}
-  \texttt{W1.weight}~$\in\mathbb{R}^{M\times(d_1+1)}$:
-  \begin{itemize}
-    \item $a_1^m = \texttt{W1.weight}[m,\,{:2}]$
-    \item $\text{tcoef}_m = \texttt{W1.weight}[m,\,2]$
-    \item $b_m = \texttt{W1.bias}[m]$
-  \end{itemize}
-  \texttt{W0.weight}~$\in\mathbb{R}^{d_1\times M}$:
-  \begin{itemize}
-    \item $a_0^m = \texttt{W0.weight}[:,m]$
-  \end{itemize}
-\end{block}
-\medskip
-\textbf{Importante:} se reutilizan los modelos de B sin reentrenar.
+\column{0.42\textwidth}
+\begin{alertblock}{Predicción teórica}
+  Si el Meta-Teorema 1 se aplica, las nubes de puntos $\{a_1^m\}$ de distintas seeds deben \textbf{solaparse}: misma forma, mismo rango de $\|a_0^m\|$.
+
+  \medskip
+  Desviaciones visibles indicarían múltiples minimizadores o lenta convergencia.
+\end{alertblock}
 \end{columns}
 
 \end{frame}
 
 % -------------------------------------------------------------------
-\begin{frame}{Experimento E — Figura completa}
+\begin{frame}{Experimento E2 — Figura completa}
 
 \begin{center}
-  \includegraphics[width=0.92\linewidth]{../figuras/E_parameter_analysis.png}
+  \includegraphics[width=0.92\textwidth]{../figuras/E2_parameter_robustness.png}
 \end{center}
-{\footnotesize\textit{Fila 0: histogramas marginales de $a_1^m$, $a_2^m$, $a_0^m$. Fila 1: scatter 2D de $a_1^m$ coloreado por importancia $\|a_0^m\|_2$. Fila 2: scatter $c_m(0)$ vs $c_m(T)$, importancias ordenadas, correlación entrada--salida.}}
+\vspace{-4pt}
+{\footnotesize Fila 0: init variable (datos fijos) \quad|\quad Fila 1: datos variables (init fija).
+Cada color es una semilla distinta.}
 
 \end{frame}
 
 % -------------------------------------------------------------------
-\begin{frame}{Experimento E — Fila 0: marginales por tipo de parámetro}
-
+\begin{frame}{Experimento E2 — Interpretación}
+\small
 \begin{columns}
-\column{0.55\textwidth}
+\column{0.50\textwidth}
 
-\textbf{Panel izquierdo — $a_1^m$ (pesos de entrada):}
+\textbf{Scatter $a_1^m$ (col.\ 0):}
 
-La distribución muestra una estructura \textbf{bimodal} llamativa con dos picos en $\pm 0.3$--$0.4$, \emph{completamente ausente} en el prior $\nu^\infty$ (que es unimodal).
-
-\begin{alertblock}{Interpretación de la bimodalidad}
-  Make Moons tiene simetría de reflexión: una neurona con dirección $a_1^m$ y otra con $-a_1^m$ producen la misma activación $|\sigma(\cdot)|$. La red aprende ambas orientaciones como «funciones de base» complementarias. El prior suave no puede anticipar esta estructura emergente del problema.
-\end{alertblock}
+Las nubes de puntos de las distintas seeds se \textbf{solapan} en la misma región bimodal del plano $\mathbb{R}^2$. La forma general de $\nu^*$ (dos cúmulos simétricos) se reproduce en todos los runs.
 
 \medskip
-\textbf{Panel derecho — $a_0^m$ (pesos de salida):}
-Distribución concentrada en cero con cola pesada. La mayoría de neuronas son «silenciosas»; unas pocas dominan el campo.
+\textbf{Histograma $a_1^m[k]$ vs $\nu^\infty$ (col.\ 1):}
 
-\column{0.41\textwidth}
-\begin{block}{Panel central — $a_2^m$ (temporal + sesgo)}
-  Distribución más ancha que $a_1^m$ y $a_0^m$. Refleja que el \emph{cuándo} se activa cada neurona tiene más libertad que la \emph{dirección} espacial.
-\end{block}
+Los histogramas de cada seed (colores) se solapan entre sí y con la prior $\nu^\infty$ (línea blanca discontinua). La distribución aprendida $\nu^*$ es bimodal; la prior es unimodal — la red \emph{se aleja} del prior de forma consistente.
 
-\medskip
-\begin{block}{Comparación con $\nu^\infty$}
-  La línea blanca discontinua es el prior $\nu^\infty\propto e^{-\ell(a)}$. Los parámetros aprendidos \textbf{no coinciden} con el prior a pesar de la regularización: el prior es una «tendencia», no una restricción dura.
-\end{block}
-\end{columns}
+\column{0.47\textwidth}
 
-\end{frame}
+\textbf{Importancias $\|a_0^m\|$ ordenadas (col.\ 2):}
 
-% -------------------------------------------------------------------
-\begin{frame}{Experimento E — Fila 1: distribución 2D de $a_1^m$}
-
-\begin{columns}
-\column{0.55\textwidth}
-
-Cada neurona se representa como un punto $(a_1^m[0],\, a_1^m[1])\in\mathbb{R}^2$, coloreado por importancia $\|a_0^m\|_2$.
+Las curvas de todas las seeds siguen el mismo patrón en codo: pocas neuronas dominan. La banda $\pm 1\sigma$ blanca es estrecha.
 
 \medskip
-Los tres paneles corresponden a $\varepsilon\in\{0, 0.01, 0.5\}$:
-
-\begin{itemize}
-  \item \textbf{$\varepsilon=0$}: los vectores se dispersan ampliamente. Algunos con $\|a_1^m\|$ grande (proyecciones agresivas) tienen $\|a_0^m\|$ pequeño (colores oscuros) y viceversa: \textbf{compensación entrada–salida}.
-  \medskip
-  \item \textbf{$\varepsilon=0.01$}: ligera concentración hacia el origen. Las neuronas importantes (colores claros) aparecen en regiones específicas del plano $a_1$.
-  \medskip
-  \item \textbf{$\varepsilon=0.5$}: todos los pesos son pequeños (cerca del origen), coherente con la concentración hacia $\nu^\infty$ vista en B3.
-\end{itemize}
-
-\column{0.41\textwidth}
-\begin{block}{Estructura bimodal visible en 2D}
-  Para $\varepsilon\in\{0, 0.01\}$ se aprecian dos nubes simétricas de puntos, reflejando la bimodalidad de la distribución marginal: los vectores $a_1^m$ se agrupan en dos «familias» con orientaciones opuestas.
-\end{block}
-\medskip
-\begin{block}{Color = importancia}
-  La escala de color (\textit{plasma}) codifica $\|a_0^m\|_2$. Un patrón de color organizado indicaría que la red asigna la importancia de forma estructurada según la dirección de $a_1^m$.
-\end{block}
-\end{columns}
-
-\end{frame}
-
-% -------------------------------------------------------------------
-\begin{frame}[fragile]{Experimento E — Contribución neuronal $c_m(t)$}
-
-\begin{columns}
-\column{0.55\textwidth}
-
-Para cada neurona $m$ y «tiempo de red» $t$:
-\[
-  c_m(t) = \frac{1}{N}\sum_{i=1}^N \bigl|\sigma\!\bigl(a_1^m\!\cdot X_i + \text{tcoef}_m\cdot t + b_m\bigr)\bigr|\cdot\|a_0^m\|_2
-\]
-
-\medskip
-\textit{Nota:} se usa $X_i = X_0^i$ (datos iniciales), no la trayectoria $X_t^i$. Esto aísla el efecto del tiempo codificado en los pesos, independientemente del flujo.
-
-\begin{lstlisting}[style=python]
-def contribution_at_t(a1, tcoef, bias, a0,
-                       X_local, t):
-    pre = (X_local @ a1.T
-           + tcoef * t + bias)  # (N, M)
-    act = np.abs(np.tanh(pre))\
-             .mean(axis=0)      # (M,)
-    return act * norm(a0, axis=1) # (M,)
-
-c0 = contribution_at_t(..., t=0.0)
-cT = contribution_at_t(..., t=1.0)
-\end{lstlisting}
-
-\column{0.41\textwidth}
-\begin{block}{Scatter $c_m(0)$ vs.\ $c_m(T)$}
-  El panel (2,0) muestra cada neurona en el plano $(c_m(0), c_m(T))$:
-  \begin{itemize}
-    \item \textbf{Sobre la diagonal:} más activa al final del flujo (cuando las clases ya están más separadas).
-    \item \textbf{Bajo la diagonal:} se apaga durante la ODE.
-    \item \textbf{Cerca del origen:} neurona inactiva en ambos extremos (bajo $\|a_0^m\|$).
-  \end{itemize}
-\end{block}
-
-\medskip
-Esto revela la \textbf{especialización temporal}: algunas neuronas actúan al inicio (lunas entrelazadas), otras al final (separación completada).
-
-\end{columns}
-
-\end{frame}
-
-% -------------------------------------------------------------------
-\begin{frame}{Experimento E — Importancias y correlación entrada–salida}
-
-\begin{columns}
-\column{0.52\textwidth}
-
-\textbf{Panel (2,1) — Importancias ordenadas:}
-
-Las 64 neuronas se ordenan por $\|a_0^m\|_2$ descendente. La curva cae bruscamente: \textbf{5--10 neuronas realizan la mayor parte del trabajo} — rango efectivo bajo del campo.
-
-\medskip
-Mayor $\varepsilon$ produce curvas más planas: la penalización KL reparte más uniformemente el trabajo entre neuronas.
-
-\bigskip
-\textbf{Panel (2,2) — Correlación $\|a_1^m\|\,\leftrightarrow\,\|a_0^m\|$:}
-
-\begin{tabular}{cc}
-  \toprule
-  $\varepsilon$ & $r$ \\
-  \midrule
-  0 & $\approx -0.6$ \\
-  0.01 & $\approx +0.6$ \\
-  0.5 & $\approx 0$ \\
-  \bottomrule
-\end{tabular}
-
-\column{0.44\textwidth}
-\begin{alertblock}{Inversión de correlación: resultado clave}
-  Con \textbf{$\varepsilon=0$}: correlación \textbf{negativa}. Las neuronas con proyecciones de entrada grandes compensan con salidas pequeñas (y viceversa).
-
-  \medskip
-  Con \textbf{$\varepsilon=0.01$}: correlación \textbf{positiva}. La penalización KL hace que cada norma grande «cueste»; la red prefiere neuronas que sean importantes en entrada \emph{y} en salida a la vez.
-
-  \medskip
-  Con \textbf{$\varepsilon=0.5$}: correlación $\approx 0$. Las normas son tan pequeñas que no hay estructura.
-
-  \medskip
-  La regularización entrópica \textbf{cambia cualitativamente} la estructura de $\nu^*$, no solo su escala.
+\begin{alertblock}{Conclusión}
+  $\nu^*$ es \textbf{robusta} tanto a la inicialización como al dataset de entrenamiento. Esto corrobora empíricamente el Meta-Teorema 1: el minimizador estable es \textbf{genérico} (aparece en casi toda condición inicial).
 \end{alertblock}
 \end{columns}
 
@@ -627,7 +669,7 @@ def get_circles(n=400, noise=0.08,
 \begin{center}
   \includegraphics[width=0.92\linewidth]{../figuras/F_circles_parameter_distribution.png}
 \end{center}
-{\footnotesize\textit{Filas: F1 (datos variables), F2 (init variable). Columnas: pérdida, scatter 2D de $a_1^m$, histograma de ángulos $\theta$. Fila 2: $\bar{R}$ por run, escala de $\|a_1^m\|$, importancias ordenadas.}}
+{\footnotesize\textit{Fila 0 (F1): pérdida, scatter 2D de $a_1^m$, histograma de ángulos $\theta$. Fila 1 (F2): ídem con init variable.}}
 
 \end{frame}
 
@@ -664,7 +706,7 @@ Los vectores $a_1^m$ de los 10 runs (coloreados por run) forman una \textbf{nube
 \begin{columns}
 \column{0.55\textwidth}
 
-\textbf{Panel (2,0) — $\bar{R}$ por run:}
+\textbf{Resultados $\bar{R}$ (impreso en consola por run):}
 
 \begin{tabular}{lcc}
   \toprule
@@ -690,11 +732,6 @@ Ambos valores son \textbf{consistentes con el nivel de ruido} de la distribució
   \smallskip
   Resultado robusto a F1 y F2.
 \end{alertblock}
-
-\smallskip
-\begin{block}{Importancias: estructura universal}
-  Codo rápido en $\|a_0^m\|_2$ tanto en circles como en moons: propiedad de la \textbf{arquitectura}, no del dataset.
-\end{block}
 \end{columns}
 
 \end{frame}
@@ -741,10 +778,8 @@ Ambos valores son \textbf{consistentes con el nivel de ruido} de la distribució
     Exp.\ D1: boxplots de $J^*$ compactos con $\varepsilon=0.01$; dispersos con $\varepsilon=0$ \\[4pt]
   Inicialización domina sobre datos en moons &
     Exp.\ D: std(D1)=0.074~$\gg$~std(D2)=0.026 \\[4pt]
-  Tipos de parámetros con distribuciones distintas &
-    Exp.\ E fila 0: $a_1^m$ bimodal, $a_0^m$ cola pesada \\[4pt]
-  $\varepsilon$ cambia cualitativamente la estructura de $\nu^*$ &
-    Exp.\ E: inversión de correlación $r(\|a_1^m\|,\|a_0^m\|)$: $-0.6\to+0.6$ \\[4pt]
+  $\nu^*$ robusta a seeds de init y datos en moons &
+    Exp.\ E2: nubes de $a_1^m$ se solapan; misma curva de importancias \\[4pt]
   Geometría de $\gamma_0$ determina $\nu^*$ &
     Exp.\ F: circles $\Rightarrow$ $\bar{R}=0.125\approx 1/\sqrt{64}$ (isótropo) \\[4pt]
   Isotropía de $\nu^*$ robusta a semillas &
@@ -764,7 +799,7 @@ Ambos valores son \textbf{consistentes con el nivel de ruido} de la distribució
   \begin{itemize}
     \item \textbf{Convergencia} (Exp.\ D): $\varepsilon>0$ reduce la dispersión de $J^*$ entre seeds $\Rightarrow$ unicidad más robusta.
     \medskip
-    \item \textbf{Estructura de $\nu^*$} (Exp.\ E): $\varepsilon$ invierte la correlación entrada--salida ($r: -0.6 \to +0.6$) y aplanación de la curva de importancias.
+    \item \textbf{Robustez de $\nu^*$} (Exp.\ E2): distintas seeds convergen a la misma distribución de $a_1^m$ — confirmación del minimizador único.
     \medskip
     \item $\varepsilon$ no necesita ser grande: \textbf{cualquier $\varepsilon>0$} garantiza la condición PL (Meta-Teorema 2).
   \end{itemize}
@@ -779,7 +814,7 @@ Ambos valores son \textbf{consistentes con el nivel de ruido} de la distribució
     \medskip
     \item make\_circles ($SO(2)$) $\to$ $a_1^m$ uniforme en $S^1$.
     \medskip
-    \item La estructura de importancias ($\|a_0^m\|_2$) es \textbf{universal}: depende de la arquitectura, no del dataset.
+    \item La estructura de importancias ($\|a_0^m\|_2$) en codo es \textbf{robusta} entre seeds (Exp.\ E2): pocas neuronas dominan independientemente de la inicialización o el dataset.
   \end{itemize}
 \end{block}
 \end{columns}

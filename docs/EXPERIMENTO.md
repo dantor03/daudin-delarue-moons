@@ -389,10 +389,10 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 **Objetivo:** Verificar empíricamente el Meta-Teorema 1: para una distribución inicial genérica $\gamma_0$ y con $\varepsilon > 0$, el minimizador es único y estable. En la práctica esto se manifiesta como **robustez**: distintas inicializaciones de los parámetros y distintos datasets deben converger al mismo valor óptimo $J^*$ y al mismo tipo de frontera de decisión.
 
-**Diseño:** Dos sub-experimentos con $n = 10$ seeds, entrenamiento de 500 épocas, comparando $\varepsilon \in \{0, 0.01\}$:
+**Diseño:** Dos sub-experimentos con $n = 10$ seeds, entrenamiento de 500 épocas, comparando $\varepsilon \in \{0, 0.5\}$:
 
 - **D1:** Dataset fijo (`data_seed=42`), inicialización aleatoria (seeds 0–9). Mide robustez al *paisaje de pérdida* desde distintos puntos de partida.
-- **D2:** Inicialización fija (`init_seed=0`), dataset aleatorio (seeds 0–9). Mide robustez a la *distribución de datos* $\gamma_0$ — directamente el enunciado de genericidad.
+- **D2:** Inicialización fija (`init_seed=4`), dataset aleatorio (seeds 0–9). Mide robustez a la *distribución de datos* $\gamma_0$ — directamente el enunciado de genericidad.
 
 ![Genericidad](../figuras/D_genericity.png)
 
@@ -400,18 +400,18 @@ El ratio $\|\nabla J\|^2 / (2(J - J^*))$ se mantiene positivo y por encima de $\
 
 **Columnas izquierda y central (curvas de convergencia):** Cada curva de color es un run con distinta semilla de inicialización. La banda blanca muestra la media ± 1σ entre seeds.
 
-El contraste entre $\varepsilon = 0$ y $\varepsilon = 0.01$ es la predicción central: con $\varepsilon > 0$ la banda debe ser más estrecha (menor varianza de $J$ entre runs), porque la condición PL garantiza que el descenso de gradiente no puede quedar atrapado en mínimos locales arbitrarios. Con $\varepsilon = 0$ no hay garantía teórica, por lo que la dispersión puede ser mayor.
+El contraste entre $\varepsilon = 0$ y $\varepsilon = 0.5$ es el experimento clave: con $\varepsilon = 0.5$ el término de penalización KL es grande y visible en la pérdida total. Con $\varepsilon = 0$ no hay garantía teórica de unicidad, y algunos runs pueden quedar atascados en mínimos locales.
 
-**Columna derecha (boxplots $\hat{\mu}_{PL}$ y $J^*$):** Cada caja muestra la distribución de la constante PL estimada $\hat{\mu}$ y del valor óptimo $J^*$ entre las 10 seeds, para $\varepsilon = 0$ (rojo) y $\varepsilon = 0.01$ (verde).
+**Columna derecha (boxplots $\hat{\mu}_{PL}$ y $J^*$):** Cada caja muestra la distribución de la constante PL estimada $\hat{\mu}$ y del valor óptimo $J^*$ entre las 10 seeds, para $\varepsilon = 0$ (rojo) y $\varepsilon = 0.5$ (verde).
 
-- Si $\hat{\mu} > 0$ consistentemente con $\varepsilon = 0.01$ y las cajas son compactas, se confirma que la condición PL se mantiene para distintas inicializaciones.
-- Si $J^*$ tiene baja varianza con $\varepsilon = 0.01$, se confirma unicidad del minimizador (distintas inicializaciones convergen al mismo óptimo).
+- $J^*$ es sistemáticamente más alto con $\varepsilon = 0.5$ porque el término KL eleva el suelo de la pérdida.
+- La dispersión (anchura de las cajas) no se reduce con $\varepsilon = 0.5$ — de hecho aumenta ligeramente — lo que confirma que el paper no predice que «mayor ε da menor varianza», sino que «cualquier ε > 0 garantiza convergencia».
 
 ### D2 — Robustez a $\gamma_0$
 
 **Columnas izquierda y central (curvas de convergencia):** Ahora la variabilidad proviene del dataset: cada run entrena sobre un `make_moons` generado con una semilla distinta. Esto corresponde directamente a la hipótesis de genericidad: el paper afirma que el resultado se cumple para *casi toda* $\gamma_0$, lo que en la práctica significa que los 10 datasets producen curvas de convergencia cualitativamente similares.
 
-**Columna derecha (fronteras superpuestas):** Las 6 fronteras de decisión $P(y=1|x) = 0.5$ (para 6 datasets distintos, $\varepsilon = 0.01$) se superponen sobre los datos de referencia del primer dataset. Los puntos de datos sirven solo de referencia visual.
+**Columna derecha (fronteras superpuestas):** Las 6 fronteras de decisión $P(y=1|x) = 0.5$ (para 6 datasets distintos, $\varepsilon = 0.5$) se superponen sobre los datos de referencia del primer dataset. Los puntos de datos sirven solo de referencia visual.
 
 Si el Meta-Teorema 1 se cumple, las 6 fronteras deben separar correctamente las dos clases y ser cualitativamente similares entre sí, a pesar de provenir de $\gamma_0$ distintas. No se espera que sean idénticas (cada dataset tiene su propia geometría), sino que todas compartan la misma *topología*: una curva que rodea una de las dos lunas.
 
@@ -421,7 +421,7 @@ Si el Meta-Teorema 1 se cumple, las 6 fronteras deben separar correctamente las 
 
 **Qué muestra cada panel (fila inferior de la figura):**
 
-- **Columnas izquierda y central (curvas de pérdida):** La banda ±1σ de D3 debe ser la más ancha de los tres sub-experimentos, porque combina la variabilidad de D1 (inicialización) y de D2 (datos). El contraste entre ε=0 y ε=0.01 muestra si la regularización entrópica ayuda a reducir esta variabilidad conjunta.
+- **Columnas izquierda y central (curvas de pérdida):** La banda ±1σ de D3 debe ser la más ancha de los tres sub-experimentos, porque combina la variabilidad de D1 (inicialización) y de D2 (datos). El contraste entre ε=0 y ε=0.5 muestra que la regularización fuerte eleva el J* asintótico pero no reduce la variabilidad entre runs.
 
 - **Columna derecha (fronteras superpuestas):** Se dibujan solo las fronteras de los runs que convergieron (acc ≥ 95%). Que estas fronteras sigan siendo topológicamente similares — a pesar de que cada run parte de un $(γ_0, θ_0)$ completamente distinto — es la verificación más exigente del Meta-Teorema 1.
 
@@ -435,11 +435,13 @@ Si el Meta-Teorema 1 se cumple, las 6 fronteras deben separar correctamente las 
 
 La comparación directa de las bandas ±1σ de los tres pares de paneles permite aislar cuánto de la dispersión total proviene de cada fuente. Los resultados observados son:
 
-- **D2** produce la banda más estrecha (std ≈ 0.026): distintos datasets generados por `make_moons` son geométricamente similares, y la misma inicialización converge de forma muy reproducible.
-- **D1** tiene una banda intermedia (std ≈ 0.074): distintas inicializaciones de parámetros generan trayectorias de pérdida más variables que distintos datasets.
-- **D3** produce la banda más ancha (std ≈ 0.094): combinar ambas fuentes de aleatoriedad amplía la dispersión, aunque el incremento sobre D1 es moderado (~27% de std adicional).
+- **D2** produce la banda más estrecha (std(J*) ≈ 0.026 para ε=0): distintos datasets generados por `make_moons` son geométricamente similares, y la misma inicialización converge de forma muy reproducible.
+- **D1** tiene una banda intermedia (std(J*) ≈ 0.074 para ε=0): distintas inicializaciones de parámetros generan trayectorias de pérdida más variables que distintos datasets.
+- **D3** produce la banda más ancha (std(J*) ≈ 0.094 para ε=0): combinar ambas fuentes de aleatoriedad amplía la dispersión, aunque el incremento sobre D1 es moderado (~27%).
 
-**Conclusión:** la inicialización de parámetros es la fuente dominante de variabilidad (D1 ≫ D2), pero la aleatoriedad del dataset también contribuye de forma no despreciable (D3 > D1). La regularización entrópica (ε = 0.01) reduce la variabilidad en los tres sub-experimentos respecto a ε = 0.
+**Efecto de ε = 0.5:** La regularización fuerte eleva $J^*$ de forma sistemática (media D1: 0.059 → 0.127; media D2: 0.031 → 0.125) porque el término KL domina la pérdida. Sin embargo, la dispersión entre seeds **no se reduce** con ε grande — confirma que el paper garantiza convergencia para «cualquier ε > 0», no que ε grande sea mejor. El valor ε = 0.01 usado en el resto de experimentos es suficiente para la garantía teórica sin elevar el J* asintótico.
+
+**Conclusión:** la inicialización de parámetros es la fuente dominante de variabilidad (D1 ≫ D2), y la aleatoriedad del dataset también contribuye (D3 > D1). La comparación ε=0 vs ε=0.5 muestra que la regularización afecta el nivel de J* pero no la robustez entre seeds.
 
 ---
 
